@@ -8,3 +8,8 @@ typings/
 # Node.js dependency directory
 node_modules/
 *.local
+
+# Environment variables (這裡就是隱形斗篷！)
+.env
+.env.local
+.env.*.local

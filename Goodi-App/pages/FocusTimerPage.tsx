@@ -22,6 +22,8 @@ const FocusTimerPage: React.FC = () => {
   const [selectedSound, setSelectedSound] = useState<SoundOption>('melody');
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  const totalSessions = Object.values(userData.focusSessionCounts || {}).reduce((a, b) => (a as number) + (b as number), 0) as number;
+
   const playSound = useCallback((sound: SoundOption) => {
     if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     const audioContext = audioContextRef.current;
@@ -95,6 +97,10 @@ const FocusTimerPage: React.FC = () => {
             <div className="absolute top-4 left-6 text-gray-600 flex items-center gap-2 opacity-70">
                 <img src="https://api.iconify.design/twemoji/stopwatch.svg" className="w-6 h-6" />
                 <span className="font-bold">專注番茄鐘</span>
+            </div>
+            
+            <div className="absolute top-4 right-6 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-bold border border-orange-200">
+                已累積專注 {totalSessions} 次
             </div>
 
             <div className="flex flex-row items-center justify-center w-full gap-8 md:gap-16 mt-4">
