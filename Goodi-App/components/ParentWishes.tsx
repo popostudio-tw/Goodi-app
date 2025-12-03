@@ -3,9 +3,10 @@ import React from 'react';
 
 interface ParentWishesProps {
     wishes: string[];
+    onConvert: (wish: string) => void;
 }
 
-const ParentWishes: React.FC<ParentWishesProps> = ({ wishes }) => {
+const ParentWishes: React.FC<ParentWishesProps> = ({ wishes, onConvert }) => {
     return (
         <div className="bg-white/60 backdrop-blur-md rounded-xl shadow-md p-4 border border-white/50">
             <h3 className="font-bold text-lg mb-3 text-gray-700 flex items-center">
@@ -17,8 +18,16 @@ const ParentWishes: React.FC<ParentWishesProps> = ({ wishes }) => {
             {wishes.length > 0 ? (
                 <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                     {wishes.map((wish, index) => (
-                        <div key={index} className="bg-yellow-50/60 backdrop-blur-sm p-3 rounded-lg text-yellow-800 border border-yellow-200/60">
-                            <p className="text-sm">"{wish}"</p>
+                        <div key={index} className="bg-yellow-50/60 backdrop-blur-sm p-3 rounded-lg text-yellow-800 border border-yellow-200/60 flex justify-between items-center gap-2">
+                            <p className="text-sm flex-grow">"{wish}"</p>
+                            <button 
+                                onClick={() => onConvert(wish)}
+                                className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap transition-colors flex items-center gap-1"
+                                title="將此願望上架到獎勵商店"
+                            >
+                                <img src="https://api.iconify.design/solar/shop-bold.svg" className="w-3.5 h-3.5 invert" />
+                                上架
+                            </button>
                         </div>
                     ))}
                 </div>

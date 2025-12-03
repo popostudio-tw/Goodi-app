@@ -22,8 +22,6 @@ const FocusTimerPage: React.FC = () => {
   const [selectedSound, setSelectedSound] = useState<SoundOption>('melody');
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  const totalSessions = Object.values(userData.focusSessionCounts || {}).reduce((a, b) => (a as number) + (b as number), 0) as number;
-
   const playSound = useCallback((sound: SoundOption) => {
     if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     const audioContext = audioContextRef.current;
@@ -98,10 +96,6 @@ const FocusTimerPage: React.FC = () => {
                 <img src="https://api.iconify.design/twemoji/stopwatch.svg" className="w-6 h-6" />
                 <span className="font-bold">專注番茄鐘</span>
             </div>
-            
-            <div className="absolute top-4 right-6 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-bold border border-orange-200">
-                已累積專注 {totalSessions} 次
-            </div>
 
             <div className="flex flex-row items-center justify-center w-full gap-8 md:gap-16 mt-4">
                 {/* Left: Timer Circle */}
@@ -139,17 +133,26 @@ const FocusTimerPage: React.FC = () => {
                 {/* Right: Controls Container */}
                 <div className="flex-1 w-full space-y-4 flex flex-col justify-center max-w-xs">
                     {/* Duration Selection */}
-                    <div className="grid grid-cols-2 gap-2 bg-white/40 p-2 rounded-2xl backdrop-blur-sm border border-white/50 shadow-inner">
-                        {Object.entries(DURATIONS).map(([label, duration]) => (
-                            <button 
-                                key={label} 
-                                onClick={() => { if (!isActive) { setSelectedDuration(duration); setTimeLeft(duration); setIsCompleted(false); }}} 
-                                disabled={isActive} 
-                                className={`py-3 rounded-xl font-bold text-sm transition-all ${selectedDuration === duration && !isActive ? 'bg-orange-500 text-white shadow-md scale-105' : 'text-gray-600 hover:bg-white/60'}`}
-                            >
-                                {label}
-                            </button>
-                        ))}
+                    <div className="grid grid-cols-2 gap-3 bg-white/40 p-3 rounded-2xl backdrop-blur-sm border border-white/50 shadow-inner">
+                        {Object.entries(DURATIONS).map(([label, duration]) => {
+                            const isSelected = selectedDuration === duration;
+                            const mins = duration / 60;
+                            const count = userData.focusSessionCounts?.[mins] || 0;
+                            
+                            return (
+                                <button 
+                                    key={label} 
+                                    onClick={() => { if (!isActive) { setSelectedDuration(duration); setTimeLeft(duration); setIsCompleted(false); }}} 
+                                    disabled={isActive} 
+                                    className={`py-3 px-1 rounded-xl flex flex-col items-center justify-center transition-all ${isSelected && !isActive ? 'bg-orange-500 text-white shadow-md scale-105 ring-2 ring-orange-200' : 'text-gray-600 hover:bg-white/60 bg-white/30 border border-transparent'}`}
+                                >
+                                    <span className="font-bold text-sm mb-0.5">{label}</span>
+                                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-black/5 text-gray-500'}`}>
+                                        達成 {count} 次
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* Sound Selection */}

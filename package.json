@@ -2,5 +2,10 @@
   "dependencies": {
     "@dataconnect/generated": "file:src/dataconnect-generated",
     "@modelcontextprotocol/sdk": "^1.23.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17"
   }
 }

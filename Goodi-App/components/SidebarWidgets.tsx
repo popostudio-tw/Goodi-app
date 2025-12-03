@@ -261,7 +261,8 @@ const AiYesterdaySummary: React.FC = () => {
                     .map(t => t.description)
                     .join(', ');
                 
-                const prompt = `你是AI夥伴Goodi。根據${userData.userProfile.nickname}孩子昨日的活動，寫一段溫馨的總結與鼓勵（繁體中文，80-120字）。昨日完成任務：${yesterdayTasks || '沒有記錄到喔'}`;
+                // Using Chinese content but sanitized prompt structure
+                const prompt = `You are AI partner Goodi. Write a warm summary and encouragement based on child ${userData.userProfile.nickname}'s activity yesterday (in Traditional Chinese, 80-120 words). Completed tasks: ${yesterdayTasks || 'No records'}`;
                  const response = await ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
@@ -296,7 +297,7 @@ const TodayInHistory: React.FC = () => {
         const fetchEvent = async () => {
             const today = new Date();
             const todayKey = today.toISOString().split('T')[0];
-            const cacheKey = `history_real_${todayKey}`;
+            const cacheKey = `history_real_v2_${todayKey}`; // Versioned cache key
             const cachedData = localStorage.getItem(cacheKey);
             
             if (cachedData) { setEvent(cachedData); setIsLoading(false); return; }
@@ -305,7 +306,8 @@ const TodayInHistory: React.FC = () => {
                 // Use Google Search Grounding to get REAL facts
                 const response = await ai.models.generateContent({ 
                     model: 'gemini-2.5-flash', 
-                    contents: `What happened on this day (${today.getMonth() + 1}月${today.getDate()}日) in history? Find a positive, interesting event suitable for a 6-10 year old child. Respond in Traditional Chinese (繁體中文). Limit to 100 words. Ensure it is factually correct based on search results.`, 
+                    // Sanitize prompt to ASCII to avoid header encoding errors
+                    contents: `Find a fun, educational, and positive historical event from this day (${today.getMonth() + 1}/${today.getDate()}) suitable for children aged 5-12. Explain it in Traditional Chinese in an engaging way. Length: approximately 100 words. Ensure it is factually correct based on search results.`, 
                     config: { 
                         tools: [{ googleSearch: {} }] 
                     } 
@@ -342,13 +344,13 @@ const AnimalTrivia: React.FC = () => {
         const fetchTrivia = async () => {
             const today = new Date();
             const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-            const cacheKey = `trivia_${seed}`;
+            const cacheKey = `trivia_v2_${seed}`; // Versioned cache key
             const cachedData = localStorage.getItem(cacheKey);
 
             if (cachedData) { setFact(cachedData); setIsLoading(false); return; }
 
             try {
-                const prompt = "用繁體中文給我一個關於動物的、適合兒童的、有趣且富含知識的冷知識。請確保內容豐富，長度至少 50 字，但不超過 100 字。";
+                const prompt = "Tell me a fun and educational animal trivia fact suitable for children aged 5-12. Explain it in Traditional Chinese. Make it interesting! Length: approximately 100 words.";
                 const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { seed } });
                 const newFact = response.text.trim();
                 setFact(newFact);
