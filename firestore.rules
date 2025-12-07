@@ -1,0 +1,12 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 僅允許已登入的使用者讀寫自己的使用者資料
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 您可以在此處為其他資料集合新增規則
+  }
+}

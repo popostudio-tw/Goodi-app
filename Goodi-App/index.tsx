@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { authInitialized } from './firebase'; // ✅ 引入我們的初始化 Promise
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -9,8 +10,12 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+
+// ✅ 等待 Firebase 持久性設定完成後才渲染 App
+authInitialized.then(() => {
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+});

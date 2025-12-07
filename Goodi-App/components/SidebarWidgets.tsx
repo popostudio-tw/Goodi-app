@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { useUserData } from '../UserContext';
 import TestScoreModal from './TestScoreModal';
+import { callGemini } from '../src/services/aiClient'; // ⬅️ 改為呼叫後端服務
 
 const WidgetCard: React.FC<{
     icon: string;
@@ -239,7 +239,6 @@ const AiYesterdaySummary: React.FC = () => {
     const [summary, setSummary] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const { userData } = useUserData();
-    const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY as string }), []);
 
     useEffect(() => {
         const fetchSummary = async () => {
@@ -261,16 +260,12 @@ const AiYesterdaySummary: React.FC = () => {
                     .map(t => t.description)
                     .join(', ');
                 
-                // Using Chinese content but sanitized prompt structure
                 const prompt = `You are AI partner Goodi. Write a warm summary and encouragement based on child ${userData.userProfile.nickname}'s activity yesterday (in Traditional Chinese, 80-120 words). Completed tasks: ${yesterdayTasks || 'No records'}`;
-                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                });
-                const newSummary = response.text.trim();
+                const newSummary = await callGemini(prompt); // ⬅️ 改為呼叫後端
                 setSummary(newSummary);
                 localStorage.setItem(cacheKey, newSummary);
             } catch (error) {
+                console.error("Summary Error:", error);
                 setSummary("昨天也是很棒的一天！繼續加油喔！");
             } finally {
                 setIsLoading(false);
@@ -278,7 +273,7 @@ const AiYesterdaySummary: React.FC = () => {
         };
 
         fetchSummary();
-    }, [ai, userData.transactions, userData.userProfile.nickname]);
+    }, [userData.transactions, userData.userProfile.nickname]);
 
     return (
         <WidgetCard icon="https://api.iconify.design/twemoji/spiral-notepad.svg" title="昨日總結" className="bg-white/60">
@@ -291,42 +286,31 @@ const AiYesterdaySummary: React.FC = () => {
 const TodayInHistory: React.FC = () => {
     const [event, setEvent] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-    const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY as string }), []);
 
     useEffect(() => {
         const fetchEvent = async () => {
             const today = new Date();
             const todayKey = today.toISOString().split('T')[0];
-            const cacheKey = `history_real_v2_${todayKey}`; // Versioned cache key
+            const cacheKey = `history_real_v3_${todayKey}`; 
             const cachedData = localStorage.getItem(cacheKey);
             
             if (cachedData) { setEvent(cachedData); setIsLoading(false); return; }
             
             try {
-                // Use Google Search Grounding to get REAL facts
-                const response = await ai.models.generateContent({ 
-                    model: 'gemini-2.5-flash', 
-                    // Sanitize prompt to ASCII to avoid header encoding errors
-                    contents: `Find a fun, educational, and positive historical event from this day (${today.getMonth() + 1}/${today.getDate()}) suitable for children aged 5-12. Explain it in Traditional Chinese in an engaging way. Length: approximately 100 words. Ensure it is factually correct based on search results.`, 
-                    config: { 
-                        tools: [{ googleSearch: {} }] 
-                    } 
-                });
-                
-                // Grounding chunks contain the source, response.text contains the summarized answer
-                const newEvent = response.text.trim();
+                const prompt = `Find a fun, educational, and positive historical event from this day (${today.getMonth() + 1}/${today.getDate()}) suitable for children aged 5-12. Explain it in Traditional Chinese in an engaging way. Length: approximately 100 words. Ensure it is factually correct based on search results.`;
+                const newEvent = await callGemini(prompt); // ⬅️ 改為呼叫後端
                 setEvent(newEvent);
                 localStorage.setItem(cacheKey, newEvent);
             } catch (error) {
                 console.error("History Error", error);
-                setEvent("歷史上的今天發生了好多有趣的事，可以去圖書館查查看喔！");
+                setEvent("歷史上的今天發生了好多有趣的事，可以去圖書館查看看喔！");
             } finally {
                 setIsLoading(false);
             }
         };
 
         fetchEvent();
-    }, [ai]);
+    }, []);
 
     return (
         <WidgetCard icon="https://api.iconify.design/twemoji/spiral-calendar.svg" title="歷史的今天" color="yellow">
@@ -338,24 +322,23 @@ const TodayInHistory: React.FC = () => {
 const AnimalTrivia: React.FC = () => {
     const [fact, setFact] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-    const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY as string }), []);
 
     useEffect(() => {
         const fetchTrivia = async () => {
             const today = new Date();
             const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-            const cacheKey = `trivia_v2_${seed}`; // Versioned cache key
+            const cacheKey = `trivia_v3_${seed}`;
             const cachedData = localStorage.getItem(cacheKey);
 
             if (cachedData) { setFact(cachedData); setIsLoading(false); return; }
 
             try {
                 const prompt = "Tell me a fun and educational animal trivia fact suitable for children aged 5-12. Explain it in Traditional Chinese. Make it interesting! Length: approximately 100 words.";
-                const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { seed } });
-                const newFact = response.text.trim();
+                const newFact = await callGemini(prompt); // ⬅️ 改為呼叫後端
                 setFact(newFact);
                 localStorage.setItem(cacheKey, newFact);
             } catch (error) {
+                console.error("Trivia Error:", error);
                 setFact("你知道嗎？海豚睡覺時只閉一隻眼睛喔！");
             } finally {
                 setIsLoading(false);
@@ -363,7 +346,7 @@ const AnimalTrivia: React.FC = () => {
         };
 
         fetchTrivia();
-    }, [ai]);
+    }, []);
 
     return (
         <WidgetCard icon="https://api.iconify.design/twemoji/paw-prints.svg" title="動物冷知識" color="green">

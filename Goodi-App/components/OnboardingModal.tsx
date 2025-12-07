@@ -36,12 +36,12 @@ const OnboardingModal: React.FC = () => {
                 <p className="text-slate-900 font-bold mb-6 drop-shadow-sm">在開始之前，請先告訴我你的名字吧！</p>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label htmlFor="nickname" className="block text-center text-sm font-black text-slate-800 mb-1 drop-shadow-sm">你的小名</label>
+                        <label htmlFor="nickname" className="block text-center text-sm font-black text-slate-800 mb-1 drop-shadow-sm">我該怎麼稱呼你呢?</label>
                         <input type="text" id="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} className="w-full px-4 py-2 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-400 transition-colors placeholder-slate-500 font-bold text-slate-900 text-center" placeholder="例如：小明" required />
                     </div>
                     <div>
-                        <label htmlFor="age" className="block text-center text-sm font-black text-slate-800 mb-1 drop-shadow-sm">你的年齡 (選填)</label>
-                        <input type="number" id="age" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-4 py-2 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-400 transition-colors placeholder-slate-500 font-bold text-slate-900 text-center" placeholder="例如：8" min="1" max="18" />
+                        <label htmlFor="age" className="block text-center text-sm font-black text-slate-800 mb-1 drop-shadow-sm">你的年齡 (必填)，為了最佳體驗</label>
+                        <input type="number" id="age" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-4 py-2 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-400 transition-colors placeholder-slate-500 font-bold text-slate-900 text-center" placeholder="例如：8" min="1" max="18" required />
                     </div>
                      <div>
                         <label htmlFor="referral" className="block text-center text-sm font-black text-slate-800 mb-1 drop-shadow-sm">推薦碼 (選填)</label>

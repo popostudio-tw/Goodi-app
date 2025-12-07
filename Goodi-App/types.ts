@@ -12,9 +12,12 @@ export enum Page {
   ParentChildTime = 'ParentChildTime',
 }
 
-export type ParentView = 'dashboard' | 'tasks' | 'gachapon' | 'rewards';
+export type ParentView = 'dashboard' | 'tasks' | 'gachapon' | 'rewards' | 'settings';
 
-export type Plan = 'free' | 'paid199' | 'paid499';
+export type Plan = 'free' | 'advanced_monthly' | 'premium_monthly' | 'advanced_lifetime' | 'premium_lifetime';
+export type SubscriptionType = 'monthly' | 'lifetime';
+export type PricingTier = 'free' | 'advanced' | 'premium';
+
 export type ZhuyinMode = 'auto' | 'on' | 'off';
 
 export interface Task {
@@ -142,6 +145,15 @@ export interface UserData {
     sharedMessages: string[];
     wishes: string[];
     plan: Plan;
+    subscriptionType?: SubscriptionType;
+    pricingTier: PricingTier;
+    geminiApiKey?: string; 
+    childrenCount: number; 
+    maxChildren: number; 
+    promoCode?: string; 
+    discountPercentage?: number; 
+    originalPrice?: number; 
+    discountedPrice?: number; 
     parentPin: string | null;
     shopRewards: Reward[];
     gachaponPrizes: GachaponPrize[];

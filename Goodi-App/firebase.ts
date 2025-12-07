@@ -1,25 +1,43 @@
 
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, FirebaseApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  browserLocalPersistence,
+  setPersistence,
+  Auth,
+} from "firebase/auth";
+import { getFirestore, Firestore } from "firebase/firestore";
+import { getFunctions, Functions } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC7sv2rhv6SHAyDK4TXs5mpwa_cmMzka1M",
-  authDomain: "goodi-5ec49.firebaseapp.com",
-  databaseURL: "https://goodi-5ec49-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "goodi-5ec49",
-  storageBucket: "goodi-5ec49.firebasestorage.app",
-  messagingSenderId: "368247732471",
-  appId: "1:368247732471:web:7880acfa0c59075cbf3bf2",
-  measurementId: "G-H0TFMWY2JP"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
+// 立即初始化 App
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+
+// 將所有服務的實例先建立起來
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app, "us-central1");
 const googleProvider = new GoogleAuthProvider();
 
-export { app, analytics, auth, db, googleProvider };
+// ✅ 建立一個 Promise 來追蹤持久性設定的狀態
+const authInitialized = setPersistence(auth, browserLocalPersistence);
+
+// ✅ 匯出實例和初始化 Promise
+export {
+  app,
+  auth,
+  db,
+  functions,
+  googleProvider,
+  authInitialized, // 匯出這個 Promise
+};
