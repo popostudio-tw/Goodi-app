@@ -78,12 +78,9 @@ export const getInitialUserData = (uid: string): UserData => ({
   parentIntroDismissed: false,
   subscriptionType: 'monthly',
   pricingTier: 'free',
-  geminiApiKey: undefined,
+  // Removed undefined values - Firestore does not accept undefined
+  // geminiApiKey, promoCode, discountPercentage, originalPrice, discountedPrice
   childrenCount: 1,
   maxChildren: 1,
-  promoCode: undefined,
-  discountPercentage: undefined,
-  originalPrice: undefined,
-  discountedPrice: undefined,
   zhuyinMode: 'auto',
 });

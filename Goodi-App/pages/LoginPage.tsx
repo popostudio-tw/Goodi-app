@@ -3,10 +3,10 @@ import { auth, googleProvider } from "../firebase";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithRedirect,
+  signInWithPopup,
 } from "firebase/auth";
 
-interface LoginPageProps {}
+interface LoginPageProps { }
 
 const SocialButton: React.FC<{
   icon: string;
@@ -66,11 +66,26 @@ const LoginPage: React.FC<LoginPageProps> = () => {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
-      console.log("[Login] start Google redirect login");
-      await signInWithRedirect(auth, googleProvider);
+      console.log("[Login] Starting Google popup login...");
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("[Login] Google login SUCCESS! User:", result.user.uid);
+      console.log("[Login] Email:", result.user.email);
+      // AuthContext will detect the user and App.tsx will redirect
     } catch (error: any) {
-      console.error("[Login] Google login ERROR", error);
-      alert(`Google 登入失敗: ${error.code || error.message}`);
+      console.error("[Login] Google login ERROR:", error);
+      console.error("[Login] Error code:", error.code);
+      console.error("[Login] Error message:", error.message);
+
+      let errorMessage = error.message;
+      if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = "登入視窗被關閉";
+      } else if (error.code === 'auth/popup-blocked') {
+        errorMessage = "瀏覽器封鎖了彈出視窗，請允許彈出視窗後再試";
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        errorMessage = "登入已取消";
+      }
+
+      alert(`Google 登入失敗: ${errorMessage}`);
       setIsLoading(false);
     }
   };
