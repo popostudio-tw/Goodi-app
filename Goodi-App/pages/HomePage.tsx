@@ -5,6 +5,8 @@ import { useUserData } from '../UserContext';
 import SidebarWidgets from '../components/SidebarWidgets';
 import OnboardingModal from '../components/OnboardingModal';
 
+// ... (保持 FeaturedTaskListItem, DailyTaskCard, and other components不變)
+
 // Standardized Button Styles
 const BTN_BASE = "flex-1 h-10 px-3 flex items-center justify-center gap-1.5 rounded-xl font-bold text-sm transition-all shadow-sm active:scale-95";
 const BTN_COMPLETE = "bg-emerald-500 text-white hover:bg-emerald-600";
@@ -184,17 +186,25 @@ const CustomTaskModal: React.FC<{
 };
 
 const HomePage: React.FC<HomePageProps> = ({ setPraiseTaskInfo }) => {
-  const { userData, handleCompleteTask, handleChildAddTask, addToast } = useUserData();
-  
-  // ✅ If userData is not loaded yet, return a loading state or null 
-  if (!userData) {
-    return <div className="h-full flex items-center justify-center"><p>讀取中...</p></div>;
-  }
-
-  const { tasks, plan, planTrialEndDate, userProfile, zhuyinMode } = userData;
+  const { userData, userDataLoading, handleCompleteTask, handleChildAddTask, addToast } = useUserData();
   
   const [dailyTab, setDailyTab] = useState<'life' | 'chore' | 'learning'>('life');
   const [showCustomTaskModal, setShowCustomTaskModal] = useState(false);
+  
+  // Immediately show loading if either auth or user data is loading
+  if (userDataLoading) {
+    return <div className="h-full flex items-center justify-center"><p>讀取使用者資料中...</p></div>;
+  }
+
+  // If loading is finished but there's still no user data, it's an error or logged-out state
+  if (!userData) {
+    return <div className="h-full flex items-center justify-center"><p>無法載入使用者資料，請重新登入。</p></div>;
+  }
+
+  const { tasks, plan, planTrialEndDate, userProfile } = userData;
+
+  // Moved this check after userData is confirmed to exist
+  const showOnboarding = userProfile && (!userProfile.onboardingComplete || !userProfile.nickname);
 
   const isTrialActive = planTrialEndDate && new Date(planTrialEndDate) > new Date();
   const effectivePlan = (isTrialActive && plan === 'free') ? 'paid199' : plan;
@@ -207,7 +217,8 @@ const HomePage: React.FC<HomePageProps> = ({ setPraiseTaskInfo }) => {
 
   const { weeklyTasks, specialTasks, lifeTasks, choreTasks, learningTasks } = useMemo(() => {
     const weekly: Task[] = [], special: Task[] = [], life: Task[] = [], chore: Task[] = [], learning: Task[] = [];
-    tasks.forEach(t => {
+    // Ensure tasks exist before trying to loop
+    (tasks || []).forEach(t => {
         let isVisible = true;
         if (t.schedule && t.schedule.length > 0) {
             if (!t.schedule.includes(currentDayKey)) isVisible = false;
@@ -223,7 +234,7 @@ const HomePage: React.FC<HomePageProps> = ({ setPraiseTaskInfo }) => {
             else if (t.category === '學習') learning.push(t);
         }
     });
-    return { weeklyTasks, specialTasks, lifeTasks, choreTasks, learningTasks };
+    return { weeklyTasks: weekly, specialTasks: special, lifeTasks: life, choreTasks: chore, learningTasks: learning };
   }, [tasks, currentDayKey, todayStr]);
   
   const dailyTabConfig = {
@@ -251,7 +262,8 @@ const HomePage: React.FC<HomePageProps> = ({ setPraiseTaskInfo }) => {
 
   return (
     <>
-        {userProfile && !userProfile.onboardingComplete && <OnboardingModal />}
+        {showOnboarding && <OnboardingModal />}
+
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 h-full">
             {showCustomTaskModal && <CustomTaskModal onClose={() => setShowCustomTaskModal(false)} onSubmit={handleCustomTaskSubmit} />}
             <div className="lg:col-span-3 space-y-4 sm:space-y-6 flex flex-col">
@@ -296,7 +308,7 @@ const HomePage: React.FC<HomePageProps> = ({ setPraiseTaskInfo }) => {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 flex-grow content-start overflow-y-auto pr-1 pb-2">
-                        {currentDailyTasks.map((task) => (
+                        {(currentDailyTasks || []).map((task) => (
                             <div key={task.id} className="h-full">
                                 <DailyTaskCard task={task} onCompleteTask={handleCompleteTask} onReportPraise={setPraiseTaskInfo} />
                             </div>

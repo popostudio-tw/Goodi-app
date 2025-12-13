@@ -1,254 +1,178 @@
-import React, { useState } from "react";
-import { auth, googleProvider } from "../firebase";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signInWithRedirect,
-} from "firebase/auth";
 
-interface LoginPageProps {}
+import React, { useState } from 'react';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup,
+  GoogleAuthProvider,
+} from 'firebase/auth';
+import { auth } from '../firebase';
 
-const SocialButton: React.FC<{
-  icon: string;
-  label: string;
-  onClick: () => void;
-}> = ({ icon, label, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="w-full flex items-center justify-center p-3 rounded-lg border border-gray-200 transition-colors bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
-  >
-    <img src={icon} alt="" className="w-6 h-6 mr-3" />
-    <span className="font-semibold">{label}</span>
-  </button>
-);
+const googleProvider = new GoogleAuthProvider();
 
-const LoginPage: React.FC<LoginPageProps> = () => {
+const LoginPage: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordVisible, setPasswordVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("[Login] submit", { isSignUp, email });
-    setIsLoading(true);
-
+    setLoading(true);
+    setError('');
+    console.log(
+      '[LoginPage] starting email auth using projectId =',
+      auth.app.options.projectId
+    );
     try {
       if (isSignUp) {
-        if (password !== confirmPassword) {
-          alert("兩次輸入的密碼不一致！");
-          return;
-        }
-        console.log("[Login] try SIGNUP with email:", email);
-        const cred = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-        console.log("[Login] SIGNUP success, uid =", cred.user.uid);
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        console.log('[LoginPage] sign up success:', cred.user);
       } else {
-        console.log("[Login] try SIGNIN with email:", email);
         const cred = await signInWithEmailAndPassword(auth, email, password);
-        console.log("[Login] SIGNIN success, uid =", cred.user.uid);
+        console.log('[LoginPage] sign in success:', cred.user);
       }
-      // 不在這裡跳頁，交給 App.tsx 的 onAuthStateChanged 控制畫面
-    } catch (error: any) {
-      console.error("[Login] email/password ERROR", error);
-      alert(`${isSignUp ? "註冊失敗" : "登入失敗"}: ${error.code || error.message}`);
+    } catch (err: any) {
+      console.error('[LoginPage] email auth error:', err);
+      setError(err.message.includes('auth/invalid-credential') 
+        ? '登入失敗：電子郵件或密碼錯誤。'
+        : `發生錯誤： ${err.message}`
+      );
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
-    setIsLoading(true);
+    setLoading(true);
+    setError('');
+    console.log(
+      '[LoginPage] starting Google sign-in using projectId =',
+      auth.app.options.projectId
+    );
     try {
-      console.log("[Login] start Google redirect login");
-      await signInWithRedirect(auth, googleProvider);
-    } catch (error: any) {
-      console.error("[Login] Google login ERROR", error);
-      alert(`Google 登入失敗: ${error.code || error.message}`);
-      setIsLoading(false);
+      const cred = await signInWithPopup(auth, googleProvider);
+      console.log('[LoginPage] Google sign in success:', cred.user);
+    } catch (err: any) {
+      console.error('[LoginPage] Google login error:', err);
+      setError(`Google 登入失敗: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4 bg-gradient-to-br from-lime-50 to-green-100">
-      <div className="max-w-4xl w-full mx-auto bg-white/60 backdrop-blur-md border border-white/50 rounded-3xl shadow-2xl overflow-hidden grid md:grid-cols-2">
-        {/* Left Side: Form */}
-        <div className="p-8 md:p-12">
-          <div className="flex items-center mb-6">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#E8F5E9] to-[#C8E6C9] font-sans">
+      <div className="w-full max-w-5xl mx-4 bg-white/90 rounded-3xl shadow-xl flex flex-col md:flex-row overflow-hidden">
+        {/* 左側：登入/註冊表單 */}
+        <div className="flex-1 px-8 py-10 md:px-10 md:py-12 flex flex-col">
+          {/* Logo + 標題 */}
+          <div className="flex items-center gap-3 mb-8">
             <img
               src="https://static.wixstatic.com/media/ec806c_e706428e2f4d41c1b58f889f8d0efbe8~mv2.png"
-              alt="Goodi Logo"
-              className="h-10 w-auto mr-2"
+              alt="Goodi"
+              className="h-10 w-10 rounded-xl shadow-md object-contain"
             />
-            <span className="font-black text-3xl text-green-700">Goodi</span>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">
+                {isSignUp ? '註冊 Goodi 帳戶' : '登入 Goodi'}
+              </h1>
+              <p className="text-sm text-slate-500">
+                {isSignUp ? '已經有帳戶了嗎？' : '還沒有帳戶嗎？'}{' '}
+                <button
+                  type="button"
+                  className="text-blue-600 hover:text-blue-700 font-semibold"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setError(''); // 切換模式時清除錯誤
+                  }}
+                >
+                  {isSignUp ? '馬上登入' : '註冊一個'}
+                </button>
+              </p>
+            </div>
           </div>
 
-          <h1 className="text-3xl font-bold text-gray-800">
-            {isSignUp ? "建立新帳戶" : "登入 Goodi"}
-          </h1>
-          <p className="text-gray-500 mt-2 mb-6">
-            {isSignUp ? "已經有帳戶了？" : "還沒有帳戶嗎？"}
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-blue-600 font-semibold hover:underline ml-1"
-            >
-              {isSignUp ? "登入" : "註冊一個"}
-            </button>
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="font-semibold text-gray-700 block mb-1">
-                電子郵件
-              </label>
+          {/* 表單本體 */}
+          <form onSubmit={handleEmailSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700">電子郵件</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 bg-white"
                 placeholder="you@example.com"
-                className="w-full px-4 py-3 border border-gray-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
-                disabled={isLoading}
               />
             </div>
-            <div>
-              <label className="font-semibold text-gray-700 block mb-1">
-                密碼
-              </label>
-              <div className="relative">
-                <input
-                  type={passwordVisible ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="請輸入密碼"
-                  className="w-full px-4 py-3 border border-gray-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  disabled={isLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setPasswordVisible(!passwordVisible)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                >
-                  {passwordVisible ? (
-                    <img
-                      src="https://api.iconify.design/solar/eye-closed-line-duotone.svg"
-                      className="h-6 w-6"
-                      alt="Hide password"
-                    />
-                  ) : (
-                    <img
-                      src="https://api.iconify.design/solar/eye-line-duotone.svg"
-                      className="h-6 w-6"
-                      alt="Show password"
-                    />
-                  )}
-                </button>
-              </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700">密碼</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 bg-white"
+                placeholder="請輸入密碼"
+                required
+              />
             </div>
 
-            {isSignUp && (
-              <div>
-                <label className="font-semibold text-gray-700 block mb-1">
-                  確認密碼
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="再次輸入密碼"
-                  className="w-full px-4 py-3 border border-gray-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
+            {/* 錯誤訊息 */}
+            {error && (
+              <p className="text-sm text-red-500">
+                {error}
+              </p>
             )}
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-md disabled:bg-blue-300 flex items-center justify-center"
+              className="w-full mt-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:bg-blue-300"
+              disabled={loading}
             >
-              {isLoading && (
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              )}
-              {isLoading ? "處理中..." : isSignUp ? "註冊" : "登入"}
+              {loading ? '處理中…' : (isSignUp ? '註冊' : '登入')}
             </button>
           </form>
 
-          <div className="flex items-center my-6">
-            <div className="flex-grow border-t border-gray-300/50"></div>
-            <span className="mx-4 text-gray-400 font-semibold">或</span>
-            <div className="flex-grow border-t border-gray-300/50"></div>
-          </div>
+          {/* Google 登入 */}
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="text-xs text-slate-400">或</span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
 
-          <SocialButton
-            icon="https://api.iconify.design/flat-color-icons/google.svg"
-            label="使用 Google 帳戶登入"
-            onClick={handleGoogleLogin}
-          />
-
-          <div className="mt-8 text-center text-xs text-gray-500">
-            <p>點擊上方按鈕，即表示您同意我們的服務條款及隱私權政策。</p>
-            <a
-              href="/terms"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-gray-700"
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-xl py-3 bg-white hover:bg-slate-50 transition-colors disabled:bg-slate-100"
             >
-              服務條款
-            </a>
-            <span className="mx-1">與</span>
-            <a
-              href="/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-gray-700"
-            >
-              隱私權政策
-            </a>
+              <img src="https://static.wixstatic.com/shapes/ec806c_c40de356f37b4dd6a49afac9e18b3bf5.svg" alt="Google" className="w-5 h-5"/>
+              <span className="text-sm font-semibold text-slate-700">
+                使用 Google 帳戶登入
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* Right Side: Illustration */}
-        <div className="hidden md:flex items-center justify-center bg-green-50/50 backdrop-blur-sm p-12">
-          <div className="text-center">
+        {/* 右側：形象區 */}
+        <div className="hidden md:flex flex-1 flex-col items-center justify-center gap-6 bg-gradient-to-br from-[#FFFDE7] to-[#FFF8E1] p-10">
+          <div className="w-48 h-48 rounded-3xl bg-white shadow-lg flex items-center justify-center">
             <img
-              src="https://api.iconify.design/twemoji/children-crossing.svg"
-              alt="Welcome illustration"
-              className="w-64 h-64 mx-auto drop-shadow-lg"
+              src="https://static.wixstatic.com/shapes/ec806c_8c38f20492494671b8e7f75ca5e0b214.svg"
+              alt="親子安全標誌"
+              className="w-36 h-36 object-contain"
             />
-            <h2 className="text-2xl font-bold text-green-800 mt-6">
+          </div>
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-slate-900 mb-2">
               開啟孩子的成長之旅
             </h2>
-            <p className="text-green-700 mt-2">
+            <p className="text-sm text-slate-600 max-w-xs mx-auto">
               透過遊戲化的任務，建立好習慣，
-              <br />
               讓每一次進步都充滿樂趣！
             </p>
           </div>

@@ -1,6 +1,5 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
-
-const functions = getFunctions();
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../../firebase";
 
 /**
  * 呼叫後端 Gemini Cloud Function

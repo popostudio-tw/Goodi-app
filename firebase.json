@@ -1,83 +1,13 @@
 {
-  "emulators": {
-    "singleProjectMode": true,
-    "auth": {
-      "host": "127.0.0.1",
-      "port": 9099
-    },
-    "functions": {
-      "host": "127.0.0.1",
-      "port": 5001
-    },
-    "firestore": {
-      "host": "127.0.0.1",
-      "port": 8081
-    },
-    "database": {
-      "host": "127.0.0.1",
-      "port": 9005
-    },
-    "hosting": {
-      "host": "127.0.0.1",
-      "port": 5000
-    },
-    "pubsub": {
-      "host": "127.0.0.1",
-      "port": 8086
-    },
-    "storage": {
-      "host": "127.0.0.1",
-      "port": 9199
-    },
-    "eventarc": {
-      "host": "127.0.0.1",
-      "port": 9299
-    },
-    "tasks": {
-      "host": "127.0.0.1",
-      "port": 9499
-    },
-    "ui": {
-      "enabled": true,
-      "host": "127.0.0.1",
-      "port": 4000
-    }
-  },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "disallowLegacyRuntimeConfig": true,
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
-        "*.local"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
-      ]
-    }
-  ],
   "hosting": {
-    "public": "Goodi-App/dist",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
     "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "**", "destination": "/index.html" }
     ]
-  },
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "storage": {
-    "rules": "storage.rules"
   }
 }
