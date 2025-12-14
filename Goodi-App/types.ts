@@ -1,5 +1,3 @@
-
-
 export enum Page {
   Home = 'Home',
   Gachapon = 'Gachapon',
@@ -12,13 +10,11 @@ export enum Page {
   ParentChildTime = 'ParentChildTime',
 }
 
-export type ParentView = 'dashboard' | 'tasks' | 'gachapon' | 'rewards' | 'settings';
+export type ParentView = 'dashboard' | 'tasks' | 'gachapon' | 'rewards';
 
-export type Plan = 'free' | 'advanced_monthly' | 'premium_monthly' | 'advanced_lifetime' | 'premium_lifetime';
-export type SubscriptionType = 'monthly' | 'lifetime';
-export type PricingTier = 'free' | 'advanced' | 'premium';
-
+export type Plan = 'free' | 'paid199' | 'paid499';
 export type ZhuyinMode = 'auto' | 'on' | 'off';
+export type PricingTier = 'free' | 'advanced' | 'premium';
 
 export interface Task {
   id: number;
@@ -74,15 +70,15 @@ export interface Achievement {
 }
 
 export interface UserProfile {
-    nickname: string;
-    age: number | null;
-    onboardingComplete?: boolean;
+  nickname: string;
+  age: number | null;
+  onboardingComplete?: boolean;
 }
 
 export interface ToastMessage {
-    id: number;
-    message: string;
-    type: 'success' | 'celebrate';
+  id: number;
+  message: string;
+  type: 'success' | 'celebrate';
 }
 
 export type Subject = '國語' | '英語' | '數學' | '社會' | '自然';
@@ -97,71 +93,67 @@ export interface ScoreEntry {
 }
 
 export interface InventoryItem {
-    id: number;
-    name: string;
-    description: string;
-    timestamp: number;
-    used: boolean;
-    durationMinutes?: number;
-    action?: 'add_ticket' | 'add_to_inventory' | 'parent_child_time';
+  id: number;
+  name: string;
+  description: string;
+  timestamp: number;
+  used: boolean;
+  durationMinutes?: number;
+  action?: 'add_ticket' | 'add_to_inventory' | 'parent_child_time';
 }
 
 export interface Transaction {
-    id: number;
-    description: string;
-    amount: string; 
-    timestamp: number;
+  id: number;
+  description: string;
+  amount: string;
+  timestamp: number;
 }
 
 export interface KeyEvent {
-    id: number;
-    date: string;
-    text: string;
+  id: number;
+  date: string;
+  text: string;
 }
 
 export type FocusSessionCounts = {
-    [duration: number]: number;
+  [duration: number]: number;
 };
 
 export interface ActiveParentChildTimeSession {
-    itemId: number;
-    itemName: string;
-    itemIcon: string;
-    totalDurationSeconds: number;
+  itemId: number;
+  itemName: string;
+  itemIcon: string;
+  totalDurationSeconds: number;
 }
 
 export interface UserData {
-    userProfile: UserProfile;
-    points: number;
-    tokens: number;
-    gachaponTickets: number;
-    streak: number;
-    tasks: Task[];
-    achievements: Achievement[];
-    inventory: InventoryItem[];
-    transactions: Transaction[];
-    journalEntries: JournalEntry[];
-    scoreHistory: ScoreEntry[];
-    sharedMessages: string[];
-    wishes: string[];
-    plan: Plan;
-    subscriptionType?: SubscriptionType;
-    pricingTier: PricingTier;
-    geminiApiKey?: string; 
-    childrenCount: number; 
-    maxChildren: number; 
-    promoCode?: string; 
-    discountPercentage?: number; 
-    originalPrice?: number; 
-    discountedPrice?: number; 
-    parentPin: string | null;
-    shopRewards: Reward[];
-    gachaponPrizes: GachaponPrize[];
-    keyEvents: KeyEvent[];
-    focusSessionCounts: FocusSessionCounts;
-    frozenHabitDates: string[];
-    referralCount: number;
-    lastLoginDate?: string;
-    planTrialEndDate?: string | null;
-    parentIntroDismissed?: boolean;
+  userProfile: UserProfile;
+  points: number;
+  tokens: number;
+  gachaponTickets: number;
+  streak: number;
+  tasks: Task[];
+  achievements: Achievement[];
+  inventory: InventoryItem[];
+  transactions: Transaction[];
+  journalEntries: JournalEntry[];
+  scoreHistory: ScoreEntry[];
+  sharedMessages: string[];
+  wishes: string[];
+  plan: Plan;
+  parentPin: string | null;
+  shopRewards: Reward[];
+  gachaponPrizes: GachaponPrize[];
+  keyEvents: KeyEvent[];
+  focusSessionCounts: FocusSessionCounts;
+  frozenHabitDates: string[];
+  referralCount: number;
+  lastLoginDate?: string;
+  planTrialEndDate?: string | null;
+  parentIntroDismissed?: boolean;
+  subscriptionType?: 'monthly' | 'yearly';
+  pricingTier?: PricingTier;
+  childrenCount?: number;
+  maxChildren?: number;
+  zhuyinMode?: ZhuyinMode;
 }
