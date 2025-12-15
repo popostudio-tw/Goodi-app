@@ -33,7 +33,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
             setIsSuccess(true);
             setTimeout(() => {
                 onConfirm();
-            }, 1500);
+            }, 2500);
         }, 2000);
     };
 
@@ -47,6 +47,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
                         </svg>
                         <h2 className="text-2xl font-bold text-gray-800 mt-4">升級成功！</h2>
                         <p className="text-gray-600 mt-2">已為你解鎖新功能！</p>
+                        <button
+                            onClick={onConfirm}
+                            className="mt-6 w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors shadow-md"
+                        >
+                            太好了！
+                        </button>
                     </div>
                 ) : (
                     <>
