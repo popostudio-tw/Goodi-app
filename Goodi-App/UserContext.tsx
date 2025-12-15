@@ -1,6 +1,7 @@
 import React, { createContext, useState, useCallback, useEffect, useRef, useMemo, useContext } from 'react';
 import { Page, Task, Reward, JournalEntry, Achievement, Plan, UserProfile, ToastMessage, ScoreEntry, Subject, TestType, InventoryItem, Transaction, GachaponPrize, KeyEvent, FocusSessionCounts, UserData } from './types';
 import { GoogleGenAI } from "@google/genai";
+import { FirebaseGenAI } from './services/firebaseAI';
 import { db } from './firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
@@ -197,7 +198,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
   const [userDataLoading, setUserDataLoading] = useState(true);
   const [isPointsAnimating, setIsPointsAnimating] = useState(false);
 
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY as string }), []);
+  const ai = useMemo(() => new FirebaseGenAI(), []);
 
   // --- FIRESTORE SYNC ---
   useEffect(() => {
@@ -531,28 +532,46 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
     if (!userData) return;
     const userEntry: JournalEntry = { id: Date.now(), text, date: new Date().toISOString(), author: 'user' };
     updateUserData({ journalEntries: [...userData.journalEntries, userEntry] });
-    try {
-      const safetyPrompt = `You are a child safety expert. Analyze the following text from a child for any signs of sadness, distress, bullying, self-harm, or other negative emotions. Respond with ONLY "FLAG" if any such content is found, otherwise respond with ONLY "SAFE". Text: "${text}"`;
-      const safetyCheck = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: safetyPrompt });
-      if (safetyCheck.text.trim().toUpperCase() === 'FLAG') {
-        updateUserData({ sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...userData.sharedMessages] });
-      }
-    } catch (e) { console.error("Safety check failed:", e); }
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `孩子的心事：「${text}」`,
-        config: {
-          systemInstruction: "你是 Goodi，一個溫暖的朋友，用 6-10 歲孩子能懂的繁體中文簡短、親切地回覆，給予支持與鼓勵。[鐵則]：如果孩子提及任何關於「性」（sex, sexual topics, private parts）的話題，請務必溫柔且堅定地告訴孩子，這是一個非常重要且私密的話題，建議直接找爸爸媽媽討論，不要試圖自行解釋。",
-          temperature: 0.8
-        }
+      // 使用新的優化 Cloud Function - 將安全檢查和回應合併為一次呼叫
+      const { httpsCallable } = await import('firebase/functions');
+      const { functions } = await import('./firebase');
+      const generateSafeResponse = httpsCallable(functions, 'generateSafeResponse');
+
+      const result = await generateSafeResponse({
+        userMessage: text,
+        userNickname: userData.userProfile.nickname || '小朋友'
       });
-      const goodiEntry: JournalEntry = { id: Date.now() + 1, text: response.text, date: new Date().toISOString(), author: 'goodi' };
+
+      const data = result.data as { needsAttention: boolean; response: string };
+
+      // 如果需要關注,發送警示給家長
+      if (data.needsAttention) {
+        updateUserData({
+          sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...userData.sharedMessages],
+          journalEntries: [...userData.journalEntries, userEntry]
+        });
+        return; // 不生成 AI 回應
+      }
+
+      // 正常回應
+      const goodiEntry: JournalEntry = {
+        id: Date.now() + 1,
+        text: data.response,
+        date: new Date().toISOString(),
+        author: 'goodi'
+      };
       updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
+
     } catch (e) {
-      console.error("AI error:", e);
-      const errorEntry: JournalEntry = { id: Date.now() + 1, text: "嗚，Goodi 的訊號好像不太好，等一下再試一次好嗎？", date: new Date().toISOString(), author: 'goodi' };
+      console.error("WhisperTree error:", e);
+      const errorEntry: JournalEntry = {
+        id: Date.now() + 1,
+        text: "嗚，Goodi 的訊號好像不太好，等一下再試一次好嗎？",
+        date: new Date().toISOString(),
+        author: 'goodi'
+      };
       updateUserData({ journalEntries: [...userData.journalEntries, userEntry, errorEntry] });
     }
   };

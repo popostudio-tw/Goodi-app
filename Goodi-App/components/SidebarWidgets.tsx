@@ -2,7 +2,37 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useUserData } from '../UserContext';
 import TestScoreModal from './TestScoreModal';
-import { callGemini } from '../src/services/aiClient'; // ⬅️ 改為呼叫後端服務
+import { db, functions } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+
+// Helper: 取得台灣時間的日期字串 (YYYY-MM-DD)
+const getTaiwanDate = (): string => {
+    const now = new Date();
+    const taiwanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const year = taiwanTime.getFullYear();
+    const month = String(taiwanTime.getMonth() + 1).padStart(2, '0');
+    const day = String(taiwanTime.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+// Helper: 取得昨天的台灣時間日期字串
+const getTaiwanYesterday = (): string => {
+    const now = new Date();
+    const taiwanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    taiwanTime.setDate(taiwanTime.getDate() - 1);
+    const year = taiwanTime.getFullYear();
+    const month = String(taiwanTime.getMonth() + 1).padStart(2, '0');
+    const day = String(taiwanTime.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+// Helper: 取得台灣時間的小時數
+const getTaiwanHour = (): number => {
+    const now = new Date();
+    const taiwanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    return taiwanTime.getHours();
+};
 
 const WidgetCard: React.FC<{
     icon: string;
@@ -17,7 +47,7 @@ const WidgetCard: React.FC<{
         yellow: 'bg-yellow-50/40 border-yellow-200/50 text-yellow-900',
         red: 'bg-red-50/40 border-red-200/50 text-red-900',
     };
-    
+
     return (
         <div className={`p-4 rounded-2xl shadow-md border backdrop-blur-md transition-all hover:bg-white/70 ${color ? colorClasses[color] : 'bg-white/60 border-white/40'} ${className}`}>
             <h3 className="font-bold text-lg mb-3 flex items-center">
@@ -47,7 +77,7 @@ const GreetingCard: React.FC = () => {
         const randomIndex = Math.floor(Math.random() * LOGO_OPTIONS.length);
         setLogoUrl(LOGO_OPTIONS[randomIndex]);
     }, []);
-    
+
     const getGreeting = () => {
         const hour = new Date().getHours();
         if (hour < 12) return '早安';
@@ -97,8 +127,8 @@ const KeyEventsWidget: React.FC = () => {
                 {sortedEvents.length > 0 ? (
                     <ul className="space-y-2">
                         {sortedEvents.map(event => {
-                             const isToday = event.date === new Date().toISOString().split('T')[0];
-                             return (
+                            const isToday = event.date === new Date().toISOString().split('T')[0];
+                            return (
                                 <li key={event.id} className="flex justify-between items-center bg-white/50 backdrop-blur-sm p-2 rounded-lg border border-white/40">
                                     <div>
                                         <div className={`text-xs font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
@@ -111,7 +141,7 @@ const KeyEventsWidget: React.FC = () => {
                                         <img src="https://api.iconify.design/solar/trash-bin-minimalistic-bold.svg" className="w-4 h-4" />
                                     </button>
                                 </li>
-                             );
+                            );
                         })}
                     </ul>
                 ) : (
@@ -120,17 +150,17 @@ const KeyEventsWidget: React.FC = () => {
 
                 {isAdding ? (
                     <div className="bg-white/60 p-2 rounded-lg border border-red-100 space-y-2 animate-fade-in backdrop-blur-sm">
-                        <input 
-                            type="date" 
-                            value={date} 
-                            onChange={e => setDate(e.target.value)} 
+                        <input
+                            type="date"
+                            value={date}
+                            onChange={e => setDate(e.target.value)}
                             className="w-full p-1.5 border border-white/50 bg-white rounded-lg text-sm focus:ring-2 focus:ring-red-200 transition-colors text-gray-800"
                         />
-                        <input 
-                            type="text" 
-                            value={text} 
-                            onChange={e => setText(e.target.value)} 
-                            placeholder="例如: 運動會" 
+                        <input
+                            type="text"
+                            value={text}
+                            onChange={e => setText(e.target.value)}
+                            placeholder="例如: 運動會"
                             className="w-full p-1.5 border border-white/50 bg-white rounded-lg text-sm focus:ring-2 focus:ring-red-200 transition-colors placeholder-gray-500 text-gray-800"
                         />
                         <div className="flex gap-2">
@@ -139,7 +169,7 @@ const KeyEventsWidget: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    <button 
+                    <button
                         onClick={() => setIsAdding(true)}
                         className="w-full py-2 border-2 border-dashed border-red-300/50 text-red-500/70 rounded-lg font-bold hover:bg-red-50/50 hover:text-red-500 transition-colors text-sm flex items-center justify-center gap-1 backdrop-blur-sm"
                     >
@@ -170,7 +200,7 @@ const ScoreWidget: React.FC = () => {
                             <p className="text-sm text-gray-500">還沒有成績紀錄喔</p>
                         )}
                     </div>
-                    <button 
+                    <button
                         onClick={() => setShowModal(true)}
                         className="bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-blue-600 transition-colors flex items-center gap-1"
                     >
@@ -180,12 +210,12 @@ const ScoreWidget: React.FC = () => {
                 </div>
             </WidgetCard>
             {showModal && (
-                <TestScoreModal 
-                    onClose={() => setShowModal(false)} 
+                <TestScoreModal
+                    onClose={() => setShowModal(false)}
                     onReport={(details) => {
                         handleReportScore(details);
                         setShowModal(false);
-                    }} 
+                    }}
                 />
             )}
         </>
@@ -200,13 +230,13 @@ const DailyStats: React.FC = () => {
         const todayStr = new Date().toISOString().split('T')[0];
         const isToday = (timestamp: number) => new Date(timestamp).toISOString().split('T')[0] === todayStr;
 
-        const todaysTaskCompletions = transactions.filter(t => 
+        const todaysTaskCompletions = transactions.filter(t =>
             isToday(t.timestamp) && t.description.startsWith('完成任務:')
         );
 
         const proactive = todaysTaskCompletions.filter(t => t.description.includes('(主動)')).length;
         const normal = todaysTaskCompletions.length - proactive;
-        
+
         return { proactive, normal };
     }, [transactions]);
 
@@ -226,8 +256,8 @@ const DailyStats: React.FC = () => {
                 <div className="flex items-center gap-3">
                     <span className="text-4xl font-black text-blue-600 tabular-nums leading-none drop-shadow-sm">{stats.proactive}</span>
                     <div className="bg-blue-600 text-white px-2 py-1.5 rounded-lg flex items-center gap-1 shadow-sm shadow-blue-200">
-                         <img src="https://api.iconify.design/solar/like-bold.svg" alt="主動" className="w-3.5 h-3.5 filter brightness-0 invert" />
-                         <span className="text-xs font-bold tracking-wide">主動</span>
+                        <img src="https://api.iconify.design/solar/like-bold.svg" alt="主動" className="w-3.5 h-3.5 filter brightness-0 invert" />
+                        <span className="text-xs font-bold tracking-wide">主動</span>
                     </div>
                 </div>
             </div>
@@ -242,28 +272,41 @@ const AiYesterdaySummary: React.FC = () => {
 
     useEffect(() => {
         const fetchSummary = async () => {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            // 檢查是否已過中午12點（台灣時間）
+            const taiwanHour = getTaiwanHour();
+            if (taiwanHour < 12) {
+                setSummary('');
+                setIsLoading(false);
+                return; // 中午12點前不顯示昨日總結
+            }
+
+            const yesterdayStr = getTaiwanYesterday();
             const cacheKey = `goodi_summary_${yesterdayStr}`;
             const cachedData = localStorage.getItem(cacheKey);
 
+            // 如果有快取，直接使用（不呼叫 API）
             if (cachedData) {
                 setSummary(cachedData);
                 setIsLoading(false);
                 return;
             }
-            
+
+            // 只有在沒有快取時才呼叫 API
             try {
                 const yesterdayTasks = userData.transactions
                     .filter(t => new Date(t.timestamp).toISOString().split('T')[0] === yesterdayStr && t.description.startsWith('完成任務'))
                     .map(t => t.description)
                     .join(', ');
-                
+
                 const prompt = `You are AI partner Goodi. Write a warm summary and encouragement based on child ${userData.userProfile.nickname}'s activity yesterday (in Traditional Chinese, 80-120 words). Completed tasks: ${yesterdayTasks || 'No records'}`;
-                const newSummary = await callGemini(prompt); // ⬅️ 改為呼叫後端
-                setSummary(newSummary);
-                localStorage.setItem(cacheKey, newSummary);
+
+                // 使用 Firebase Functions
+                const generateContent = httpsCallable(functions, 'generateGeminiContent');
+                const result = await generateContent({ prompt, model: 'gemini-2.5-flash' });
+                const data = result.data as { text: string };
+
+                setSummary(data.text);
+                localStorage.setItem(cacheKey, data.text); // 儲存快取
             } catch (error) {
                 console.error("Summary Error:", error);
                 setSummary("昨天也是很棒的一天！繼續加油喔！");
@@ -273,7 +316,10 @@ const AiYesterdaySummary: React.FC = () => {
         };
 
         fetchSummary();
-    }, [userData.transactions, userData.userProfile.nickname]);
+    }, []); // ⬅️ 移除依賴，只在組件載入時執行一次
+
+    // 如果還沒過中午12點，不顯示widget
+    if (!summary && !isLoading) return null;
 
     return (
         <WidgetCard icon="https://api.iconify.design/twemoji/spiral-notepad.svg" title="昨日總結" className="bg-white/60">
@@ -289,18 +335,33 @@ const TodayInHistory: React.FC = () => {
 
     useEffect(() => {
         const fetchEvent = async () => {
-            const today = new Date();
-            const todayKey = today.toISOString().split('T')[0];
-            const cacheKey = `history_real_v3_${todayKey}`; 
-            const cachedData = localStorage.getItem(cacheKey);
-            
-            if (cachedData) { setEvent(cachedData); setIsLoading(false); return; }
-            
+            const todayKey = getTaiwanDate();
+
             try {
-                const prompt = `Find a fun, educational, and positive historical event from this day (${today.getMonth() + 1}/${today.getDate()}) suitable for children aged 5-12. Explain it in Traditional Chinese in an engaging way. Length: approximately 100 words. Ensure it is factually correct based on search results.`;
-                const newEvent = await callGemini(prompt); // ⬅️ 改為呼叫後端
-                setEvent(newEvent);
-                localStorage.setItem(cacheKey, newEvent);
+                // 1. 先從 Firestore 讀取
+                const docRef = doc(db, 'dailyContent', todayKey);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    // Firestore 有資料，直接使用
+                    setEvent(docSnap.data().historyEvent);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // 2. Firestore 沒有資料，調用 Cloud Function 生成
+                const generateContent = httpsCallable(functions, 'generateDailyContent');
+                const result = await generateContent({ date: todayKey });
+                const data = result.data as { historyEvent: string; animalTrivia: string };
+
+                // 3. 存入 Firestore（供其他用戶使用）
+                await setDoc(docRef, {
+                    historyEvent: data.historyEvent,
+                    animalTrivia: data.animalTrivia,
+                    generatedAt: new Date().toISOString()
+                });
+
+                setEvent(data.historyEvent);
             } catch (error) {
                 console.error("History Error", error);
                 setEvent("歷史上的今天發生了好多有趣的事，可以去圖書館查看看喔！");
@@ -325,18 +386,33 @@ const AnimalTrivia: React.FC = () => {
 
     useEffect(() => {
         const fetchTrivia = async () => {
-            const today = new Date();
-            const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-            const cacheKey = `trivia_v3_${seed}`;
-            const cachedData = localStorage.getItem(cacheKey);
-
-            if (cachedData) { setFact(cachedData); setIsLoading(false); return; }
+            const todayKey = getTaiwanDate();
 
             try {
-                const prompt = "Tell me a fun and educational animal trivia fact suitable for children aged 5-12. Explain it in Traditional Chinese. Make it interesting! Length: approximately 100 words.";
-                const newFact = await callGemini(prompt); // ⬅️ 改為呼叫後端
-                setFact(newFact);
-                localStorage.setItem(cacheKey, newFact);
+                // 1. 先從 Firestore 讀取
+                const docRef = doc(db, 'dailyContent', todayKey);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    // Firestore 有資料，直接使用
+                    setFact(docSnap.data().animalTrivia);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // 2. Firestore 沒有資料，調用 Cloud Function 生成
+                const generateContent = httpsCallable(functions, 'generateDailyContent');
+                const result = await generateContent({ date: todayKey });
+                const data = result.data as { historyEvent: string; animalTrivia: string };
+
+                // 3. 存入 Firestore（供其他用戶使用）
+                await setDoc(docRef, {
+                    historyEvent: data.historyEvent,
+                    animalTrivia: data.animalTrivia,
+                    generatedAt: new Date().toISOString()
+                });
+
+                setFact(data.animalTrivia);
             } catch (error) {
                 console.error("Trivia Error:", error);
                 setFact("你知道嗎？海豚睡覺時只閉一隻眼睛喔！");
@@ -350,7 +426,7 @@ const AnimalTrivia: React.FC = () => {
 
     return (
         <WidgetCard icon="https://api.iconify.design/twemoji/paw-prints.svg" title="動物冷知識" color="green">
-             {isLoading ? <p>載入中...</p> : <p>{fact}</p>}
+            {isLoading ? <p>載入中...</p> : <p>{fact}</p>}
         </WidgetCard>
     );
 };

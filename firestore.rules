@@ -11,6 +11,13 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // 每日內容（歷史的今天、動物冷知識）
+    // 允許所有已登入用戶讀取和寫入
+    match /dailyContent/{date} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
     // 您可以在此處為其他資料集合新增規則
   }
 }

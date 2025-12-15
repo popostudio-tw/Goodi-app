@@ -8,17 +8,23 @@ interface PaymentModalProps {
     onCancel: () => void;
 }
 
-const planDetails = {
-    paid199: { name: '小幫手版', price: 'NT$ 199 (一次性)' },
-    paid499: { name: '全功能版', price: 'NT$ 499 (一次性)' },
-    free: { name: '', price: '' }
+const planDetails: Record<Plan, { name: string; price: string }> = {
+    // 舊版方案
+    paid199: { name: '進階方案', price: 'NT$ 199 (一次性)' },
+    paid499: { name: '高級方案', price: 'NT$ 499 (一次性)' },
+    free: { name: '免費方案', price: 'NT$ 0' },
+    // 新版方案
+    advanced_monthly: { name: '進階方案 (月費)', price: 'NT$ 99/月' },
+    advanced_lifetime: { name: '進階方案 (買斷)', price: 'NT$ 1,499' },
+    premium_monthly: { name: '高級方案 (月費)', price: 'NT$ 199/月' },
+    premium_lifetime: { name: '高級方案 (買斷)', price: 'NT$ 1,999' },
 };
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }) => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
-    const details = planDetails[plan];
+    const details = planDetails[plan] || { name: '未知方案', price: '' };
 
     const handleConfirm = () => {
         setIsProcessing(true);
@@ -36,7 +42,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
             <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-2xl p-6 max-w-sm w-full transform transition-all animate-fade-in scale-95 border border-white/50">
                 {isSuccess ? (
                     <div className="text-center py-8">
-                         <svg className="mx-auto h-16 w-16 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="mx-auto h-16 w-16 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <h2 className="text-2xl font-bold text-gray-800 mt-4">升級成功！</h2>

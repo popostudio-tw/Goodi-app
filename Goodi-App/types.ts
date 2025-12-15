@@ -12,7 +12,17 @@ export enum Page {
 
 export type ParentView = 'dashboard' | 'tasks' | 'gachapon' | 'rewards';
 
-export type Plan = 'free' | 'paid199' | 'paid499';
+// Plan types: supporting both old (paid199, paid499) and new naming conventions
+export type Plan =
+  | 'free'
+  | 'paid199'  // Legacy: Advanced plan
+  | 'paid499'  // Legacy: Premium plan
+  | 'advanced_monthly'
+  | 'advanced_lifetime'
+  | 'premium_monthly'
+  | 'premium_lifetime';
+
+export type SubscriptionType = 'monthly' | 'lifetime';
 export type ZhuyinMode = 'auto' | 'on' | 'off';
 export type PricingTier = 'free' | 'advanced' | 'premium';
 
