@@ -10,7 +10,7 @@ const legalContent = {
     privacy: {
         title: '隱私權說明',
         content: `
-            <p class="mb-4"><strong>最後更新日期：2024年7月25日</strong></p>
+            <p class="mb-4"><strong>最後更新日期：2024年7月26日</strong></p>
             <p class="mb-4">歡迎使用 Goodi App！我們非常重視您與您孩子的隱私權。本隱私權政策旨在說明我們如何收集、使用、分享及保護您的個人資訊。</p>
             
             <h3 class="font-bold text-lg mt-6 mb-2">1. 我們收集的資訊</h3>
@@ -37,8 +37,9 @@ const legalContent = {
                 <li><strong>法律要求：</strong>若基於法律要求或為保護我們的權利，我們可能必須揭露您的資訊。</li>
             </ul>
 
-            <h3 class="font-bold text-lg mt-6 mb-2">4. 您的權利</h3>
+            <h3 class="font-bold text-lg mt-6 mb-2">4. 您的權利與法律遵循</h3>
             <p class="mb-4">根據中華民國《個人資料保護法》，您有權查詢、閱覽、複製、補充、更正、停止處理利用或刪除您與您孩子的個人資料。您可以透過我們的聯絡方式行使上述權利。</p>
+            <p class="mb-4">本隱私權政策之解釋與適用，以及與本隱私權政策有關的爭議，均應依照中華民國法律予以處理，並以台灣台北地方法院為第一審管轄法院。</p>
 
             <h3 class="font-bold text-lg mt-6 mb-2">5. 聯絡我們</h3>
             <p>如果您對本隱私權政策有任何疑問，歡迎隨時透過電子郵件與我們聯繫：popo.studio@msa.hinet.net</p>
@@ -47,7 +48,7 @@ const legalContent = {
     copyright: {
         title: '版權說明',
         content: `
-            <p class="mb-4"><strong>最後更新日期：2024年7月25日</strong></p>
+            <p class="mb-4"><strong>最後更新日期：2024年7月26日</strong></p>
             
             <h3 class="font-bold text-lg mt-6 mb-2">1. 應用程式內容</h3>
             <p class="mb-4">Goodi 應用程式內的所有內容，包括但不限於文字、圖形、Logo、圖示、圖像、音檔、以及軟體，均為 Goodi App 或其內容供應商的財產，並受到中華民國及國際版權法的保護。</p>

@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "goodi-5ec49"
-  }
+    "default": "goodi-5ec49",
+    "goodi-app": "goodi-5ec49"
+  },
+  "targets": {},
+  "etags": {}
 }

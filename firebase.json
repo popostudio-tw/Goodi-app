@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "emulators": {
     "singleProjectMode": true,
     "auth": {
@@ -57,8 +58,10 @@
       ]
     }
   ],
+=======
+>>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
   "hosting": {
-    "public": "Goodi-App/dist",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -85,16 +88,7 @@
       }
     ],
     "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "**", "destination": "/index.html" }
     ]
-  },
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "storage": {
-    "rules": "storage.rules"
   }
 }
