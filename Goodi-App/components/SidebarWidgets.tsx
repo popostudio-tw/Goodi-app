@@ -3,8 +3,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useUserData } from '../UserContext';
 import TestScoreModal from './TestScoreModal';
 import { db, functions } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { getBaselineForDate } from '../utils/dailyFallbackData';
+import { hasPremiumAccess } from '../utils/planUtils';
+
 
 // Helper: 取得台灣時間的日期字串 (YYYY-MM-DD)
 const getTaiwanDate = (): string => {
@@ -33,6 +36,73 @@ const getTaiwanHour = (): number => {
     const taiwanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
     return taiwanTime.getHours();
 };
+
+// --- Story A: Custom Hook for Stable Content ---
+const useDailyContent = () => {
+    const [data, setData] = useState({ todayInHistory: "讀取中...", animalTrivia: "讀取中..." });
+    const [isLoading, setIsLoading] = useState(true);
+    const [isBlocked, setIsBlocked] = useState(false);
+
+    useEffect(() => {
+        const fetchAll = async () => {
+            const todayKey = getTaiwanDate();
+
+            // 1. Check Cache
+            const cached = localStorage.getItem(`daily_content_v2_${todayKey}`);
+            if (cached) {
+                try {
+                    setData(JSON.parse(cached));
+                    setIsLoading(false);
+                    return;
+                } catch (e) { localStorage.removeItem(`daily_content_v2_${todayKey}`); }
+            }
+
+            // 2. Direct Firestore Read
+            try {
+                const docRef = doc(db, 'dailyContent', todayKey);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists() && docSnap.data().status === 'completed') {
+                    const firestoreData = docSnap.data();
+                    const result = {
+                        todayInHistory: firestoreData.todayInHistory,
+                        animalTrivia: firestoreData.animalTrivia
+                    };
+                    setData(result);
+                    localStorage.setItem(`daily_content_v2_${todayKey}`, JSON.stringify(result));
+                } else {
+                    // Story E/F: Fallback
+                    const baseline = getBaselineForDate(todayKey);
+                    setData(baseline);
+                }
+            } catch (error: any) {
+                console.error("Daily Content Error:", error);
+
+                // Story G: AdBlock Detect
+                if (error.message?.includes('BLOCKED_BY_CLIENT') || error.code === 'permission-denied') {
+                    setIsBlocked(true);
+                }
+
+                setData(getBaselineForDate(todayKey));
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchAll();
+    }, []);
+
+    return { ...data, isLoading, isBlocked };
+};
+
+// 小組件: Skeleton 載入樣式
+const SkeletonWidget = () => (
+    <div className="space-y-2 py-1 animate-pulse">
+        <div className="h-4 bg-gray-200 rounded w-full"></div>
+        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+        <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+    </div>
+);
+
 
 const WidgetCard: React.FC<{
     icon: string;
@@ -329,120 +399,51 @@ const AiYesterdaySummary: React.FC = () => {
 };
 
 
-const TodayInHistory: React.FC = () => {
-    const [event, setEvent] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchEvent = async () => {
-            const todayKey = getTaiwanDate();
-
-            try {
-                // 1. 先從 Firestore 讀取
-                const docRef = doc(db, 'dailyContent', todayKey);
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    // Firestore 有資料，直接使用
-                    setEvent(docSnap.data().historyEvent);
-                    setIsLoading(false);
-                    return;
-                }
-
-                // 2. Firestore 沒有資料，調用 Cloud Function 生成
-                const generateContent = httpsCallable(functions, 'generateDailyContent');
-                const result = await generateContent({ date: todayKey });
-                const data = result.data as { historyEvent: string; animalTrivia: string };
-
-                // 3. 存入 Firestore（供其他用戶使用）
-                await setDoc(docRef, {
-                    historyEvent: data.historyEvent,
-                    animalTrivia: data.animalTrivia,
-                    generatedAt: new Date().toISOString()
-                });
-
-                setEvent(data.historyEvent);
-            } catch (error) {
-                console.error("History Error", error);
-                setEvent("歷史上的今天發生了好多有趣的事，可以去圖書館查看看喔！");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchEvent();
-    }, []);
-
+const TodayInHistory: React.FC<{ content: string; isLoading: boolean; isBlocked: boolean }> = ({ content, isLoading, isBlocked }) => {
     return (
         <WidgetCard icon="https://api.iconify.design/twemoji/spiral-calendar.svg" title="歷史的今天" color="yellow">
-            {isLoading ? <p>搜尋歷史檔案中...</p> : <p>{event}</p>}
+            {isBlocked && (
+                <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded mb-2 border border-orange-100">
+                    偵測到連線阻擋，請關閉 AdBlock。
+                </div>
+            )}
+            {isLoading ? <SkeletonWidget /> : <p className="text-gray-700">{content}</p>}
         </WidgetCard>
     );
 };
 
-const AnimalTrivia: React.FC = () => {
-    const [fact, setFact] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchTrivia = async () => {
-            const todayKey = getTaiwanDate();
-
-            try {
-                // 1. 先從 Firestore 讀取
-                const docRef = doc(db, 'dailyContent', todayKey);
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    // Firestore 有資料，直接使用
-                    setFact(docSnap.data().animalTrivia);
-                    setIsLoading(false);
-                    return;
-                }
-
-                // 2. Firestore 沒有資料，調用 Cloud Function 生成
-                const generateContent = httpsCallable(functions, 'generateDailyContent');
-                const result = await generateContent({ date: todayKey });
-                const data = result.data as { historyEvent: string; animalTrivia: string };
-
-                // 3. 存入 Firestore（供其他用戶使用）
-                await setDoc(docRef, {
-                    historyEvent: data.historyEvent,
-                    animalTrivia: data.animalTrivia,
-                    generatedAt: new Date().toISOString()
-                });
-
-                setFact(data.animalTrivia);
-            } catch (error) {
-                console.error("Trivia Error:", error);
-                setFact("你知道嗎？海豚睡覺時只閉一隻眼睛喔！");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchTrivia();
-    }, []);
-
+const AnimalTrivia: React.FC<{ content: string; isLoading: boolean; isBlocked: boolean }> = ({ content, isLoading, isBlocked }) => {
     return (
         <WidgetCard icon="https://api.iconify.design/twemoji/paw-prints.svg" title="動物冷知識" color="green">
-            {isLoading ? <p>載入中...</p> : <p>{fact}</p>}
+            {isBlocked && (
+                <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded mb-2 border border-orange-100">
+                    偵測到連線阻擋，請關閉 AdBlock。
+                </div>
+            )}
+            {isLoading ? <SkeletonWidget /> : <p className="text-gray-700">{content}</p>}
         </WidgetCard>
     );
 };
 
+
 const SidebarWidgets: React.FC = () => {
+    const { userData } = useUserData();
+    const isPremium = hasPremiumAccess(userData?.plan || 'free');
+    const { todayInHistory, animalTrivia, isLoading, isBlocked } = useDailyContent();
+
     return (
         <div className="space-y-4 pb-4">
             <GreetingCard />
             <DailyStats />
-            <AiYesterdaySummary />
+            {isPremium && <AiYesterdaySummary />}
             <ScoreWidget />
-            <TodayInHistory />
-            <AnimalTrivia />
+            <TodayInHistory content={todayInHistory} isLoading={isLoading} isBlocked={isBlocked} />
+            <AnimalTrivia content={animalTrivia} isLoading={isLoading} isBlocked={isBlocked} />
             <KeyEventsWidget />
         </div>
     );
 };
+
 
 export default SidebarWidgets;

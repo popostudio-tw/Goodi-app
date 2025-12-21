@@ -8,10 +8,19 @@ import ParentWishes from '../components/ParentWishes';
 import ScoreChart from '../components/ScoreChart';
 import { GoogleGenAI, Type } from "@google/genai";
 import { FirebaseGenAI } from '../services/firebaseAI';
+import { hasPremiumAccess } from '../utils/planUtils';
 import AiGrowthReport from '../components/AiGrowthReport';
 import { useUserData, commonTasksData } from '../UserContext';
 import LegalModal from '../components/LegalModal';
 import { checkAiUsageLimit, recordAiUsage, AI_USAGE_CONFIGS, getRemainingUses } from '../utils/aiUsageLimits';
+// Referral System Components
+import ReferralShareModal from '../components/ReferralShareModal';
+import AddReferralCodeModal from '../components/AddReferralCodeModal';
+import RedeemCodeManager from '../components/RedeemCodeManager';
+// Referral System Utils
+import { getReferralProgress, getNextMilestone, canAddReferralCode, getTrialRemainingDays } from '../utils/referralUtils';
+import WeeklyReport from '../components/WeeklyReport';
+
 
 const ICON_LIST = [
   'https://api.iconify.design/twemoji/toothbrush.svg',
@@ -91,6 +100,7 @@ const AiTaskSuggestModal: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [suggestedTasks, setSuggestedTasks] = useState<Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]>([]);
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
+  const [fromTemplate, setFromTemplate] = useState(false);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -101,16 +111,18 @@ const AiTaskSuggestModal: React.FC<{
       }
 
       const todayStr = new Date().toISOString().split('T')[0];
-      const cacheKey = `aiTaskSuggestCache_${userAge}_v3`; // Updated cache key for 5 tasks
+      const cacheKey = `aiTaskSuggestCache_${userAge}_v4`;
       const cachedDataRaw = localStorage.getItem(cacheKey);
 
+      // 1. 先檢查 localStorage 快取
       if (cachedDataRaw) {
         try {
           const cachedData = JSON.parse(cachedDataRaw);
           if (cachedData.date === todayStr && Array.isArray(cachedData.suggestions)) {
             setSuggestedTasks(cachedData.suggestions);
+            setFromTemplate(cachedData.fromTemplate || false);
             setIsLoading(false);
-            return; // Use cached data
+            return;
           }
         } catch (e) {
           console.error("Failed to parse AI suggestion cache", e);
@@ -118,6 +130,38 @@ const AiTaskSuggestModal: React.FC<{
       }
 
       try {
+        // 2. 查詢任務範本庫
+        const { findMatchingTemplate, recordTemplateUsage, addTemplate } = await import('../services/taskTemplateService');
+        const template = await findMatchingTemplate(userAge);
+
+        if (template && template.tasks && template.tasks.length > 0) {
+          // 範本庫有匹配！使用範本並記錄使用次數
+          const tasks = template.tasks.map(t => ({
+            text: t.text,
+            points: t.points,
+            category: t.category as Task['category'],
+            icon: t.icon,
+            description: t.description
+          }));
+
+          setSuggestedTasks(tasks);
+          setFromTemplate(true);
+          localStorage.setItem(cacheKey, JSON.stringify({
+            date: todayStr,
+            suggestions: tasks,
+            fromTemplate: true
+          }));
+
+          if (template.id) {
+            recordTemplateUsage(template.id);
+          }
+          setIsLoading(false);
+          return;
+        }
+
+        // 3. 範本庫沒有匹配，才呼叫 AI
+        const { callAiFunction } = await import('../src/services/aiClient');
+
         const schema = {
           type: Type.ARRAY,
           items: {
@@ -133,30 +177,48 @@ const AiTaskSuggestModal: React.FC<{
           }
         };
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: `你是一位兒童發展專家。請為一位 ${userAge} 歲的孩子，推薦 5 個適合他/她年齡的、鼓勵積極主動與責任感的任務。任務類別必須是 '生活', '家務', 或 '學習'。任務的 'icon' 欄位必須從以下列表中選擇一個最符合的 URL: [${ICON_LIST.join(', ')}]。請確保任務名稱是獨一無二的。`,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: schema,
-          },
+        const result = await callAiFunction('generateGeminiContent', {
+          model: "gemini-2.0-flash",
+          prompt: `你是一位資深兒童教育專家。請為一位 ${userAge} 歲的孩子，推薦 5 個具體且適合他年齡的任務。任務必須能鼓勵自主性與責任感。任務類別只能是 '生活', '家務', 或 '學習'。請確保任務名稱獨特。請務必使用【繁體中文】回覆。任務圖示 icon 欄位必須從以下列表中選擇一個最符合的 URL: [${ICON_LIST.join(', ')}]。`,
+          responseMimeType: "application/json",
+          schema: schema,
         });
 
-        const parsedTasks = JSON.parse(response.text);
-        setSuggestedTasks(parsedTasks);
-        localStorage.setItem(cacheKey, JSON.stringify({ date: todayStr, suggestions: parsedTasks }));
-      } catch (err) {
+        const parsedTasks = typeof result.text === 'string' ? JSON.parse(result.text) : result;
+        const tasks = Array.isArray(parsedTasks) ? parsedTasks : (parsedTasks.tasks || []);
+
+        setSuggestedTasks(tasks);
+        setFromTemplate(false);
+        localStorage.setItem(cacheKey, JSON.stringify({
+          date: todayStr,
+          suggestions: tasks,
+          fromTemplate: false
+        }));
+
+        // 4. 將 AI 生成的結果儲存到範本庫，供未來使用
+        const ageMin = userAge <= 6 ? 5 : userAge <= 8 ? 7 : userAge <= 10 ? 9 : 11;
+        const ageMax = ageMin + 1;
+        await addTemplate(ageMin, ageMax, '責任感', tasks.map((t: any) => ({
+          text: t.text,
+          points: t.points,
+          category: t.category,
+          icon: t.icon,
+          description: t.description
+        })));
+
+      } catch (err: any) {
         console.error("AI suggestion error:", err);
-        setError("無法獲取 AI 建議，請稍後再試。");
+        setError(err.message || "無法獲取 AI 建議，請稍後再試。");
       } finally {
         setIsLoading(false);
       }
     };
     fetchSuggestions();
-  }, [userAge, ai]);
+  }, [userAge]); // 移除 ai 依賴，避免不必要的重新執行
 
   const filteredSuggestedTasks = useMemo(() => {
     const existingTaskTexts = new Set(existingTasks.map(t => t.text));
+
     return suggestedTasks.filter(task => !existingTaskTexts.has(task.text));
   }, [suggestedTasks, existingTasks]);
 
@@ -250,18 +312,56 @@ const AiGoalTaskGeneratorModal: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [generatedTasks, setGeneratedTasks] = useState<Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]>([]);
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
+  const [fromTemplate, setFromTemplate] = useState(false);
+  const [lastGeneratedGoal, setLastGeneratedGoal] = useState('');
 
   const handleGenerate = async () => {
     if (!goal.trim() || !userAge) {
       setError("請輸入目標並確保已設定孩子年齡。");
       return;
     }
+
+    // 防止重複點擊相同目標
+    if (goal.trim() === lastGeneratedGoal && generatedTasks.length > 0) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setGeneratedTasks([]);
     setSelectedTasks([]);
+    setFromTemplate(false);
 
     try {
+      // 1. 先查詢範本庫（根據關鍵字）
+      const { findMatchingTemplate, addTemplate, recordTemplateUsage } = await import('../services/taskTemplateService');
+      const template = await findMatchingTemplate(userAge, goal.trim());
+
+      if (template && template.tasks && template.tasks.length > 0) {
+        // 範本庫有匹配！
+        const tasks = template.tasks.map(t => ({
+          text: t.text,
+          points: t.points,
+          category: t.category as Task['category'],
+          icon: t.icon,
+          description: t.description
+        }));
+
+        setGeneratedTasks(tasks);
+        setSelectedTasks(tasks.map((_, index) => index));
+        setFromTemplate(true);
+        setLastGeneratedGoal(goal.trim());
+
+        if (template.id) {
+          recordTemplateUsage(template.id);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. 範本庫沒有匹配，呼叫 AI
+      const { callAiFunction } = await import('../src/services/aiClient');
+
       const schema = {
         type: Type.ARRAY,
         items: {
@@ -277,21 +377,34 @@ const AiGoalTaskGeneratorModal: React.FC<{
         }
       };
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `作為一名兒童發展專家，請為一位 ${userAge} 歲的孩子，圍繞「${goal}」這個目標，設計 5 個具體、可行的任務。任務類別必須是 '生活', '家務', 或 '學習'。任務的 'icon' 欄位必須從以下列表中選擇最符合的 URL: [${ICON_LIST.join(', ')}]。`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-        },
+      const result = await callAiFunction('generateGeminiContent', {
+        model: "gemini-2.0-flash",
+        prompt: `你是一位資深育兒顧問與兒童發展專家。請為一位 ${userAge} 歲的孩子，圍繞「${goal}」這個目標，設計 5 個具體、可行、且能引發孩子興趣的任務。請務必使用【繁體中文】編寫。任務類別必須是 '生活', '家務', 或 '學習'。圖示 icon 欄位必須從以下列表中選擇最合理的 URL: [${ICON_LIST.join(', ')}]。`,
+        responseMimeType: "application/json",
+        schema: schema,
       });
-      const parsedTasks = JSON.parse(response.text);
-      setGeneratedTasks(parsedTasks);
-      setSelectedTasks(parsedTasks.map((_: any, index: number) => index)); // Select all by default
 
-    } catch (err) {
+      const parsedTasks = typeof result.text === 'string' ? JSON.parse(result.text) : result;
+      const tasks = Array.isArray(parsedTasks) ? parsedTasks : (parsedTasks.tasks || []);
+
+      setGeneratedTasks(tasks);
+      setSelectedTasks(tasks.map((_: any, index: number) => index));
+      setLastGeneratedGoal(goal.trim());
+
+      // 3. 將 AI 生成的結果儲存到範本庫，供未來使用
+      const ageMin = userAge <= 6 ? 5 : userAge <= 8 ? 7 : userAge <= 10 ? 9 : 11;
+      const ageMax = ageMin + 1;
+      await addTemplate(ageMin, ageMax, goal.trim(), tasks.map((t: any) => ({
+        text: t.text,
+        points: t.points,
+        category: t.category,
+        icon: t.icon,
+        description: t.description
+      })));
+
+    } catch (err: any) {
       console.error("AI goal generation error:", err);
-      setError("無法生成任務，請嘗試更換目標或稍後再試。");
+      setError(err.message || "無法生成任務，請嘗試更換目標或稍後再試。");
     } finally {
       setIsLoading(false);
     }
@@ -308,6 +421,7 @@ const AiGoalTaskGeneratorModal: React.FC<{
     onImport(tasksToImport);
     onClose();
   };
+
 
   return (
     <Modal onClose={onClose} title="AI 智慧任務產生器" maxWidth="max-w-4xl">
@@ -407,7 +521,13 @@ const AiGoalTaskGeneratorModal: React.FC<{
 
 
 // --- Task Form (for Add/Edit) ---
-const TaskForm: React.FC<{ task?: Task; onSave: (task: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>) => void; onCancel: () => void; }> = ({ task, onSave, onCancel }) => {
+const TaskForm: React.FC<{
+  task?: Task;
+  onSave: (task: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>) => void;
+  onCancel: () => void;
+  currentPlan: Plan;
+}> = ({ task, onSave, onCancel, currentPlan }) => {
+
   const [text, setText] = useState(task?.text || '');
   const [points, setPoints] = useState(task?.points || 2);
   const [category, setCategory] = useState<Task['category']>(task?.category || '生活');
@@ -418,7 +538,14 @@ const TaskForm: React.FC<{ task?: Task; onSave: (task: Omit<Task, 'id' | 'comple
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if ((category === '學習' || category === '習慣養成') && !hasPremiumAccess(currentPlan)) {
+      alert('「學習」與「習慣養成」類別為高級版專屬功能，請升級後再試。');
+      return;
+    }
+
     const isSpecialTask = category === '特殊' || category === '每週';
+
 
     // Create base task object without initializing dateRange to undefined
     const taskData: any = {
@@ -462,10 +589,12 @@ const TaskForm: React.FC<{ task?: Task; onSave: (task: Omit<Task, 'id' | 'comple
           <select id="category" value={category} onChange={e => setCategory(e.target.value as Task['category'])} className="p-2 border border-gray-300 bg-white rounded-lg w-full focus:ring-2 focus:ring-blue-500">
             <option value="生活">生活</option>
             <option value="家務">家務</option>
-            <option value="學習">學習</option>
+            <option value="學習">學習 {!hasPremiumAccess(currentPlan) && '🔒'}</option>
             <option value="每週">每週</option>
             <option value="特殊">特殊</option>
+            <option value="習慣養成">習慣養成 {!hasPremiumAccess(currentPlan) && '🔒'}</option>
           </select>
+
         </div>
 
         {category === '特殊' && (
@@ -788,12 +917,14 @@ const Dashboard: React.FC<{
   onUpdateUserProfile: (profile: UserProfile) => void,
   frozenHabitDates: string[],
   setFrozenHabitDates: (dates: string[]) => void,
-  onShowAiReport: () => void,
-  currentPlan: Plan,
+  onShowAiReport: () => void;
+  onTriggerYesterdaySummary: () => Promise<boolean>;
+  onTriggerDailyContent: () => Promise<boolean>;
+  currentPlan: Plan;
   keyEvents: KeyEvent[];
   onAddKeyEvent: (text: string, date: string) => void;
   onDeleteKeyEvent: (id: number) => void;
-}> = ({ scoreHistory, setScoreHistory, sharedMessages, wishes, userProfile, onUpdateUserProfile, frozenHabitDates, setFrozenHabitDates, onShowAiReport, currentPlan, keyEvents, onAddKeyEvent, onDeleteKeyEvent }) => {
+}> = ({ scoreHistory, setScoreHistory, sharedMessages, wishes, userProfile, onUpdateUserProfile, frozenHabitDates, setFrozenHabitDates, onShowAiReport, onTriggerYesterdaySummary, onTriggerDailyContent, currentPlan, keyEvents, onAddKeyEvent, onDeleteKeyEvent }) => {
   const { userData, handleDismissParentIntro, handleManualPointAdjustment } = useUserData();
   const [showIntro, setShowIntro] = useState(!userData.parentIntroDismissed);
   const handleDismiss = () => {
@@ -819,24 +950,64 @@ const Dashboard: React.FC<{
           AI 智慧助理
         </h3>
         <p className="text-sm text-gray-600 mb-4">
-          讓 Goodi AI 分析孩子的進度，為您產生一份精簡的成長週報，並提供個人化的鼓勵建議。
+          讓 Goodi AI 分析孩子的進度，為您產生一份精簡的成長報告，或深入總結本週表現。
         </p>
-        <button
-          onClick={onShowAiReport}
-          disabled={currentPlan !== 'paid499'}
-          className="w-full bg-indigo-500 text-white font-semibold py-2.5 rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md"
-        >
-          {currentPlan !== 'paid499' && <img src="https://api.iconify.design/solar/lock-keyhole-minimalistic-bold.svg" alt="lock" className="w-4 h-4 mr-1.5 inline-block invert" />}
-          生成 AI 成長報告
-        </button>
-        {currentPlan !== 'paid499' && <p className="text-xs text-center text-gray-500 mt-2">此功能限高級方案</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <button
+            onClick={onShowAiReport}
+            disabled={!hasPremiumAccess(currentPlan)}
+            className="w-full bg-indigo-500 text-white font-semibold py-2.5 rounded-xl hover:bg-indigo-600 transition-all flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg active:scale-95 text-sm"
+          >
+            {!hasPremiumAccess(currentPlan) && <img src="https://api.iconify.design/solar/lock-keyhole-minimalistic-bold.svg" alt="lock" className="w-4 h-4 mr-1.5 inline-block invert" />}
+            生成 AI 報告
+          </button>
+          <button
+            onClick={() => (window as any).setShowWeeklyReport(true)}
+            disabled={!hasPremiumAccess(currentPlan)}
+            className="w-full bg-emerald-500 text-white font-semibold py-2.5 rounded-xl hover:bg-emerald-600 transition-all flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg active:scale-95 text-sm"
+          >
+            {!hasPremiumAccess(currentPlan) && <img src="https://api.iconify.design/solar/lock-keyhole-minimalistic-bold.svg" alt="lock" className="w-4 h-4 mr-1.5 inline-block invert" />}
+            檢視本週週報
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={async () => {
+              const btn = document.getElementById('trigger-summary-btn');
+              if (btn) btn.classList.add('animate-pulse', 'opacity-50');
+              await onTriggerYesterdaySummary();
+              if (btn) btn.classList.remove('animate-pulse', 'opacity-50');
+            }}
+            className="w-full bg-blue-500 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 text-sm"
+            id="trigger-summary-btn"
+          >
+            手動生成昨日總結
+          </button>
+          <button
+            onClick={async () => {
+              const btn = document.getElementById('trigger-daily-btn');
+              if (btn) btn.classList.add('animate-pulse', 'opacity-50');
+              await onTriggerDailyContent();
+              if (btn) btn.classList.remove('animate-pulse', 'opacity-50');
+            }}
+            className="w-full bg-amber-500 text-white font-semibold py-2.5 rounded-xl hover:bg-amber-600 transition-all flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 text-sm"
+            id="trigger-daily-btn"
+          >
+            手動生成今日內容
+          </button>
+        </div>
+        {!hasPremiumAccess(currentPlan) && <p className="text-xs text-center text-gray-500 mt-2">此功能限高級方案</p>}
       </div>
+
       <HabitFreezeManager frozenDates={frozenHabitDates} setFrozenDates={setFrozenHabitDates} />
-      <div className="bg-white/60 backdrop-blur-md rounded-3xl shadow-xl p-6 border border-white/50">
-        <h3 className="text-xl font-bold mb-4">成績紀錄</h3>
-        <ScoreChart scores={scoreHistory} />
-        <ScoreManagement scores={scoreHistory} setScores={setScoreHistory} />
-      </div>
+      {hasPremiumAccess(currentPlan) && (
+        <div className="bg-white/60 backdrop-blur-md rounded-3xl shadow-xl p-6 border border-white/50">
+          <h3 className="text-xl font-bold mb-4">成績紀錄</h3>
+          <ScoreChart scores={scoreHistory} />
+          <ScoreManagement scores={scoreHistory} setScores={setScoreHistory} />
+        </div>
+      )}
+
       <ParentWishes wishes={wishes} />
     </div>
   );
@@ -912,27 +1083,42 @@ const TaskManagement: React.FC<{
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setIsAdding(true)} disabled={isLocked} className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold disabled:bg-gray-300">新增任務</button>
-        <button onClick={handleAiSuggestClick} disabled={isLocked} className="bg-purple-500 text-white px-4 py-2 rounded-lg font-bold disabled:bg-gray-300 flex items-center gap-2">
+        <button
+          onClick={handleAiSuggestClick}
+          disabled={isLocked || !hasPremiumAccess(currentPlan)}
+          className="bg-purple-500 text-white px-4 py-2 rounded-lg font-bold disabled:bg-gray-300 flex items-center gap-2"
+        >
+          {!hasPremiumAccess(currentPlan) && <img src="https://api.iconify.design/solar/lock-keyhole-minimalistic-bold.svg" alt="lock" className="w-4 h-4 inline-block invert" />}
           AI 推薦
           <span className="text-xs opacity-75">({getRemainingUses('taskSuggester', AI_USAGE_CONFIGS.taskSuggester.dailyLimit)}/5)</span>
         </button>
-        <button onClick={handleAiGoalClick} disabled={isLocked} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold disabled:bg-gray-300 flex items-center gap-2">
-          AI 目標生成
+        <button
+          onClick={handleAiGoalClick}
+          disabled={isLocked || !hasPremiumAccess(currentPlan)}
+          className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold disabled:bg-gray-300 flex items-center gap-2"
+        >
+          {!hasPremiumAccess(currentPlan) && <img src="https://api.iconify.design/solar/lock-keyhole-minimalistic-bold.svg" alt="lock" className="w-4 h-4 inline-block invert" />}
+          AI 自律生成
           <span className="text-xs opacity-75">({getRemainingUses('goalTaskGenerator', AI_USAGE_CONFIGS.goalTaskGenerator.dailyLimit)}/5)</span>
         </button>
       </div>
+      {!hasPremiumAccess(currentPlan) && (
+        <p className="text-xs text-center text-gray-500">💡 AI 功能限高級方案使用</p>
+      )}
+
 
       {isAdding && (
         <Modal onClose={() => setIsAdding(false)} title="新增任務">
-          <TaskForm onSave={handleSaveTask} onCancel={() => setIsAdding(false)} />
+          <TaskForm onSave={handleSaveTask} onCancel={() => setIsAdding(false)} currentPlan={currentPlan} />
         </Modal>
       )}
 
       {editingTask && (
         <Modal onClose={() => setEditingTask(null)} title="編輯任務">
-          <TaskForm task={editingTask} onSave={handleSaveTask} onCancel={() => setEditingTask(null)} />
+          <TaskForm task={editingTask} onSave={handleSaveTask} onCancel={() => setEditingTask(null)} currentPlan={currentPlan} />
         </Modal>
       )}
+
 
       {showAiSuggest && (
         <AiTaskSuggestModal
@@ -1103,43 +1289,85 @@ interface ParentModePageProps {
   onExit: () => void;
 }
 
-const ReferralProgramCard: React.FC<{ count: number; onRefer: () => void; userProfile: UserProfile; }> = ({ count, onRefer, userProfile }) => {
-  const [copied, setCopied] = useState(false);
-
-  const referralCode = useMemo(() => {
-    const nickname = userProfile.nickname.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-    const randomPart = String(Date.now()).slice(-4);
-    return `GOODI-${nickname || 'USER'}${randomPart}`;
-  }, [userProfile.nickname]);
-
-  const referralLink = "https://goodi.app/join";
-  const textToCopy = `快來試試 Goodi 這個超棒的 App！\n\n我的推薦碼：${referralCode}\n點擊連結下載：${referralLink}\n\n使用我的推薦碼，我們都可以獲得「進階方案一週」的獎勵喔！`;
-
-  const handleRefer = () => {
-    navigator.clipboard.writeText(textToCopy).then(() => {
-      onRefer();
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
+const ReferralProgramCard: React.FC<{
+  count: number;
+  onRefer: () => void;
+  userProfile: UserProfile;
+  onOpenShare: () => void;
+  onOpenAddCode: () => void;
+  onOpenRedeemCodes: () => void;
+  canAddCode: boolean;
+  availableCodesCount: number;
+}> = ({ count, onRefer, userProfile, onOpenShare, onOpenAddCode, onOpenRedeemCodes, canAddCode, availableCodesCount }) => {
+  const progress = Math.min((count / 5) * 100, 100);
+  const remaining = Math.max(5 - count, 0);
 
   return (
-    <div className="bg-white/60 backdrop-blur-md rounded-2xl shadow-xl p-6 flex flex-col border border-white/50">
-      <h3 className="text-xl font-bold mb-3 flex items-center gap-2">
-        <img src="https://api.iconify.design/twemoji/red-heart.svg" alt="" className="w-6 h-6" />
-        分享 Goodi，解鎖方案！
+    <div className="bg-gradient-to-br from-violet-50 to-purple-50 border-2 border-purple-200 rounded-3xl shadow-xl p-6">
+      <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-purple-900">
+        <img src="https://api.iconify.design/twemoji/megaphone.svg" alt="" className="w-6 h-6" />
+        推薦好友系統
       </h3>
-      <div className="text-sm text-gray-600 mb-4 flex-grow">
-        <p className="mb-2">邀請朋友加入 Goodi，當他們使用你的推薦碼註冊時，**您和朋友都可以免費體驗**</p>
-        <p className="font-bold text-blue-600 text-base">進階方案 1 週！</p>
+
+      <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 mb-4">
+        <p className="text-sm text-purple-800 mb-2">
+          <strong>推薦人（您）</strong>：每 5 人獲 <strong className="text-purple-900">1 個月高級功能</strong><br />
+          <strong>被推薦人</strong>：註冊享 <strong className="text-purple-900">7 天試用</strong>
+        </p>
       </div>
-      <div className="mt-4 text-center p-3 border-2 border-dashed border-gray-300/50 rounded-lg bg-white/30 backdrop-blur-sm">
-        <p className="text-sm text-gray-500">已成功推薦 {count} 人 (此為模擬)</p>
-        <p className="font-mono text-lg font-bold text-gray-800 tracking-widest">{referralCode}</p>
+
+      {/* Progress */}
+      <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-bold text-purple-900">📊 推薦進度</span>
+          <span className="text-2xl font-bold text-purple-600">{count}/5</span>
+        </div>
+        <div className="relative h-3 bg-purple-100 rounded-full overflow-hidden mb-2">
+          <div
+            className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="text-xs text-purple-700 text-center">
+          {remaining === 0 ? '🎉 恭喜達標！繼續推薦獲得更多獎勵' : `再推薦 ${remaining} 人，即可獲得兌換碼！`}
+        </p>
       </div>
-      <button onClick={handleRefer} className="mt-4 w-full bg-blue-500 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-600 transition-colors shadow-md">
-        {copied ? '推薦訊息已複製！' : '複製推薦訊息'}
-      </button>
+
+      {/* Action Buttons */}
+      <div className="space-y-2">
+        <button
+          onClick={onOpenShare}
+          className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white font-bold py-3 rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2"
+        >
+          <img src="https://api.iconify.design/twemoji/mobile-phone.svg" className="w-5 h-5" alt="" />
+          <span>分享我的推薦碼</span>
+        </button>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onOpenAddCode}
+            disabled={!canAddCode}
+            className="bg-white border-2 border-purple-300 text-purple-700 font-bold py-2 rounded-xl hover:bg-purple-50 transition-all flex items-center justify-center gap-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <img src="https://api.iconify.design/twemoji/ticket.svg" className="w-4 h-4" alt="" />
+            <span>補登推薦碼</span>
+          </button>
+
+          <button
+            onClick={onOpenRedeemCodes}
+            className="bg-white border-2 border-purple-300 text-purple-700 font-bold py-2 rounded-xl hover:bg-purple-50 transition-all flex items-center justify-center gap-1 text-sm"
+          >
+            <img src="https://api.iconify.design/twemoji/wrapped-gift.svg" className="w-4 h-4" alt="" />
+            <span>我的兌換碼
+              {availableCodesCount > 0 && (
+                <span className="ml-1 bg-red-500 text-white text-xs px-1.5 rounded-full">
+                  {availableCodesCount}
+                </span>
+              )}
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1199,7 +1427,13 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
     handleReferral,
     handleFeedbackSubmit,
     handleAddKeyEvent,
-    handleDeleteKeyEvent
+    handleDeleteKeyEvent,
+    handleTriggerYesterdaySummary,
+    handleTriggerDailyContent,
+    addToast,
+    // Referral System Handlers
+    handleApplyReferralCode,
+    handleUseRedeemCode,
   } = useUserData();
 
   const {
@@ -1214,7 +1448,11 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
     frozenHabitDates,
     referralCount,
     planTrialEndDate,
-    keyEvents
+    keyEvents,
+    // Referral System
+    referralCode,
+    redeemCodes = [],
+    referredUsers = [],
   } = userData;
 
   const setPlan = (plan: Plan) => updateUserData({ plan });
@@ -1222,8 +1460,21 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<Plan | null>(null);
   const [view, setView] = useState<ParentView>('dashboard');
   const [showAiReport, setShowAiReport] = useState(false);
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [showLegalModal, setShowLegalModal] = useState<'privacy' | 'copyright' | null>(null);
+
+  // Referral System Modal States
+  const [showReferralShare, setShowReferralShare] = useState(false);
+  const [showAddReferralCode, setShowAddReferralCode] = useState(false);
+  const [showRedeemCodeManager, setShowRedeemCodeManager] = useState(false);
+
+  // Expose setShowWeeklyReport to window for the Dashboard component to use
+  useEffect(() => {
+    (window as any).setShowWeeklyReport = setShowWeeklyReport;
+  }, [setShowWeeklyReport]);
+
   const ai = useMemo(() => new FirebaseGenAI(), []);
+
 
   const isTrialActive = planTrialEndDate && new Date(planTrialEndDate) > new Date();
   // If user is on free plan but trial is active, treat as paid199 (Advanced)
@@ -1277,6 +1528,8 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
           frozenHabitDates={frozenHabitDates}
           setFrozenHabitDates={handleSetFrozenHabitDates}
           onShowAiReport={() => setShowAiReport(true)}
+          onTriggerYesterdaySummary={handleTriggerYesterdaySummary}
+          onTriggerDailyContent={handleTriggerDailyContent}
           currentPlan={effectivePlan}
           keyEvents={keyEvents}
           onAddKeyEvent={handleAddKeyEvent}
@@ -1289,7 +1542,34 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
     <>
       {selectedPlanForPayment && <PaymentModal plan={selectedPlanForPayment} onConfirm={handlePaymentConfirm} onCancel={() => setSelectedPlanForPayment(null)} />}
       {showAiReport && <AiGrowthReport onClose={() => setShowAiReport(false)} />}
+      {showWeeklyReport && <WeeklyReport onClose={() => setShowWeeklyReport(false)} />}
       {showLegalModal && <LegalModal type={showLegalModal} onClose={() => setShowLegalModal(null)} />}
+
+
+      {/* Referral System Modals */}
+      {showReferralShare && referralCode && (
+        <ReferralShareModal
+          referralCode={referralCode}
+          referralCount={referralCount}
+          referredUsers={referredUsers}
+          onClose={() => setShowReferralShare(false)}
+        />
+      )}
+      {showAddReferralCode && (
+        <AddReferralCodeModal
+          userData={userData}
+          onSubmit={handleApplyReferralCode}
+          onClose={() => setShowAddReferralCode(false)}
+        />
+      )}
+      {showRedeemCodeManager && (
+        <RedeemCodeManager
+          redeemCodes={redeemCodes}
+          onUseCode={handleUseRedeemCode}
+          onClose={() => setShowRedeemCodeManager(false)}
+        />
+      )}
+
       <div className="animate-fade-in space-y-6 h-full pb-8">
         <div className="text-center py-4">
           <h2 className="text-4xl font-black text-slate-800 drop-shadow-sm">家長管理中心</h2>
@@ -1302,7 +1582,16 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
         <PlanSelector currentPlan={effectivePlan} onSelectPlan={handlePlanSelection} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-          <ReferralProgramCard userProfile={userProfile} count={referralCount} onRefer={handleReferral} />
+          <ReferralProgramCard
+            userProfile={userProfile}
+            count={referralCount}
+            onRefer={handleReferral}
+            onOpenShare={() => setShowReferralShare(true)}
+            onOpenAddCode={() => setShowAddReferralCode(true)}
+            onOpenRedeemCodes={() => setShowRedeemCodeManager(true)}
+            canAddCode={userData.canAddReferralCode ?? true}
+            availableCodesCount={redeemCodes.filter(code => !code.used && new Date() < new Date(code.expiresAt)).length}
+          />
           <FeedbackCard onSubmit={handleFeedbackSubmit} />
         </div>
 

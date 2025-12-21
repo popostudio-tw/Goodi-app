@@ -7,7 +7,10 @@ service cloud.firestore {
       // 允許用戶讀取、創建、更新、刪除自己的文檔
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId
+                     // 如果更新包含 geminiApiKey 字段，確保它是字串類型
+                     && (!request.resource.data.keys().hasAny(['geminiApiKey']) 
+                         || request.resource.data.geminiApiKey is string);
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
@@ -16,6 +19,21 @@ service cloud.firestore {
     match /dailyContent/{date} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
+    }
+
+    // 促銷碼集合
+    // 用戶可讀取（用於驗證），但只有管理員可寫入
+    match /promoCodes/{code} {
+      allow read: if request.auth != null;
+      // 寫入權限預留給管理員（需在 users 集合設置 isAdmin 欄位）
+      allow write: if false;  // 暫時禁止寫入，需要透過 Firebase Console 手動創建
+    }
+
+    // 使用分析集合
+    // 僅用戶本人可讀寫自己的分析數據
+    match /usageAnalytics/{analyticsId} {
+      allow read: if request.auth != null && analyticsId.matches('^' + request.auth.uid + '_.*');
+      allow write: if request.auth != null && analyticsId.matches('^' + request.auth.uid + '_.*');
     }
 
     // 您可以在此處為其他資料集合新增規則

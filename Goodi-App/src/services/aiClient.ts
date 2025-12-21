@@ -1,21 +1,33 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
-
-const functions = getFunctions();
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../../firebase";
 
 /**
- * 呼叫後端 Gemini Cloud Function
- * @param prompt 傳給 Gemini 的提示
- * @returns Gemini 回傳的文字
+ * 統一呼叫後端 AI Cloud Function 的介面
+ * @param functionName 要呼叫的 Function 名稱 (例如 'generateSafeResponse', 'generateGrowthReport')
+ * @param params 傳給 Function 的參數
+ * @returns 回傳的結果內容
+ */
+export const callAiFunction = async (functionName: string, params: any): Promise<any> => {
+  try {
+    const callable = httpsCallable(functions, functionName);
+    const result = await callable(params);
+    return result.data;
+  } catch (error: any) {
+    console.error(`Error calling AI function ${functionName}:`, error);
+    // 拋出具體的錯誤訊息給前端顯示
+    throw new Error(error.message || "AI 服務暫時無法使用，請稍後再試。");
+  }
+};
+
+/**
+ * 向後兼容舊版呼叫方式
  */
 export const callGemini = async (prompt: string): Promise<string> => {
   try {
-    const generateGrowthReport = httpsCallable(functions, 'generateGrowthReport');
-    const result = await generateGrowthReport({ prompt });
-    // HttpsCallableResult 的 data 屬性是 any，我們預期它是 string
-    return result.data as string;
-  } catch (error) {
-    console.error("Error calling Gemini:", error);
-    // 你可以根據需求回傳更友善的錯誤訊息
-    return "AI 功能暫時無法使用，請稍後再試。";
+    const data: any = await callAiFunction('generateGrowthReport', { prompt });
+    return data.report || data.text || (typeof data === 'string' ? data : "");
+  } catch (error: any) {
+    return error.message;
   }
 };
+

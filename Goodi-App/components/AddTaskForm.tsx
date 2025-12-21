@@ -36,12 +36,12 @@ const AddTaskForm: React.FC<AddTaskFormProps> = ({ onAddTask, isLocked }) => {
       setTimeout(() => setAdded(false), 2000);
     }
   };
-  
+
   if (isLocked) {
     return (
       <div className="mt-6 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow">
-          <p className="font-bold">升級以新增任務</p>
-          <p className="text-sm">升級到「小幫手版」或「全功能版」即可為孩子自訂專屬任務喔！</p>
+        <p className="font-bold">升級以新增任務</p>
+        <p className="text-sm">升級到「小幫手版」或「全功能版」即可為孩子自訂專屬任務喔！</p>
       </div>
     );
   }
@@ -70,10 +70,11 @@ const AddTaskForm: React.FC<AddTaskFormProps> = ({ onAddTask, isLocked }) => {
               <option value="學習">學習</option>
               <option value="家務">家務</option>
               <option value="生活">生活</option>
+              <option value="習慣養成">習慣養成</option>
             </select>
           </div>
           <div>
-             <label htmlFor="points" className="text-gray-600 mr-2 text-sm font-medium">點數</label>
+            <label htmlFor="points" className="text-gray-600 mr-2 text-sm font-medium">點數</label>
             <input
               type="number"
               id="points"
@@ -86,12 +87,34 @@ const AddTaskForm: React.FC<AddTaskFormProps> = ({ onAddTask, isLocked }) => {
             />
           </div>
         </div>
-         <div className="flex items-center">
-            <input
-                type="checkbox"
-                id="specialTask"
-                checked={isSpecial}
-                onChange={(e) => setIsSpecial(e.target.checked)}
-                className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 bg-white"
-            />
-            <label htmlFor="specialTask" className="ml-2 block text-sm text-gray-
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="specialTask"
+            checked={isSpecial}
+            onChange={(e) => setIsSpecial(e.target.checked)}
+            className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 bg-white"
+          />
+          <label htmlFor="specialTask" className="ml-2 block text-sm text-gray-700">
+            這是特別任務 (獲得 5 點以上)
+          </label>
+        </div>
+        <button
+          type="submit"
+          className="w-full bg-green-500 text-white font-bold py-2 rounded-lg hover:bg-green-600 transition-colors shadow-md flex items-center justify-center gap-2"
+        >
+          {added ? (
+            <>
+              <img src="https://api.iconify.design/twemoji/check-mark-button.svg" className="w-5 h-5" alt="" />
+              <span>已新增！</span>
+            </>
+          ) : (
+            '新增任務'
+          )}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default AddTaskForm;

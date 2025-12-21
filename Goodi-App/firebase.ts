@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getFunctions, Functions } from "firebase/functions";
+import { getAnalytics, Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -29,6 +30,12 @@ const db = getFirestore(app);
 const functions = getFunctions(app, "us-central1");
 const googleProvider = new GoogleAuthProvider();
 
+// 初始化 Analytics（僅在瀏覽器環境中）
+let analytics: Analytics | undefined;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
+
 // ✅ 建立一個 Promise 來追蹤持久性設定的狀態
 const authInitialized = setPersistence(auth, browserLocalPersistence);
 
@@ -39,5 +46,6 @@ export {
   db,
   functions,
   googleProvider,
+  analytics,
   authInitialized, // 匯出這個 Promise
 };

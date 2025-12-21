@@ -34,24 +34,39 @@ const WalletPage: React.FC<WalletPageProps> = ({ onUseItem }) => {
     const { inventory, transactions } = userData;
     const [activeTab, setActiveTab] = useState<WalletTab>('inventory');
 
-    const InventoryView = () => (
-        <div>
-            {inventory.length > 0 ? inventory.map((item: InventoryItem) => {
-                const isTimeCoupon = item.action === 'parent_child_time';
-                return (
-                    <div key={item.id} className={`bg-white/60 backdrop-blur-md p-4 rounded-xl shadow-md flex justify-between items-center transition-opacity border border-white/50 mb-3 ${item.used ? 'opacity-60' : ''}`}>
-                        <div className="flex items-center space-x-4">
-                            <img src={item.description} alt={item.name} className="h-12 w-12 object-contain" />
-                            <div><p className="font-bold text-lg text-gray-800">{item.name}</p><p className="text-sm text-gray-500">獲得時間：{new Date(item.timestamp).toLocaleDateString()}</p></div>
+    const InventoryView = () => {
+        const handleRedemption = (itemId: number, itemName: string) => {
+            // 添加警告提示
+            const confirmMessage = `⚠️ 重要提醒\n\n請務必請家長執行兌換！\n\n一旦兌換了「${itemName}」，此獎勵將永久消失。\n\n確定要繼續嗎？`;
+
+            if (window.confirm(confirmMessage)) {
+                onUseItem(itemId);
+            }
+        };
+
+        return (
+            <div>
+                {inventory.length > 0 ? inventory.map((item: InventoryItem) => {
+                    const isTimeCoupon = item.action === 'parent_child_time';
+                    return (
+                        <div key={item.id} className={`bg-white/60 backdrop-blur-md p-4 rounded-xl shadow-md flex justify-between items-center transition-opacity border border-white/50 mb-3 ${item.used ? 'opacity-60' : ''}`}>
+                            <div className="flex items-center space-x-4">
+                                <img src={item.description} alt={item.name} className="h-12 w-12 object-contain" />
+                                <div><p className="font-bold text-lg text-gray-800">{item.name}</p><p className="text-sm text-gray-500">獲得時間：{new Date(item.timestamp).toLocaleDateString()}</p></div>
+                            </div>
+                            <button
+                                onClick={() => isTimeCoupon ? onUseItem(item.id) : handleRedemption(item.id, item.name)}
+                                disabled={item.used}
+                                className={`font-bold py-2 px-5 rounded-lg text-base transition-colors ${item.used ? 'bg-gray-300 text-gray-600' : isTimeCoupon ? 'bg-pink-500 text-white hover:bg-pink-600' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
+                            >
+                                {item.used ? '已使用' : (isTimeCoupon ? '開始計時' : '兌換')}
+                            </button>
                         </div>
-                        <button onClick={() => onUseItem(item.id)} disabled={item.used} className={`font-bold py-2 px-5 rounded-lg text-base transition-colors ${item.used ? 'bg-gray-300 text-gray-600' : isTimeCoupon ? 'bg-pink-500 text-white hover:bg-pink-600' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
-                            {item.used ? '已使用' : (isTimeCoupon ? '開始計時' : '兌換')}
-                        </button>
-                    </div>
-                )
-            }) : <div className="text-center text-gray-500 py-12"><img src="https://api.iconify.design/twemoji/school-backpack.svg" alt="背包是空的" className="w-24 h-24 mx-auto mb-4" /><p className="text-xl">你的獎品背包是空的喔！</p></div>}
-        </div>
-    );
+                    )
+                }) : <div className="text-center text-gray-500 py-12"><img src="https://api.iconify.design/twemoji/school-backpack.svg" alt="背包是空的" className="w-24 h-24 mx-auto mb-4" /><p className="text-xl">你的獎品背包是空的喔！</p></div>}
+            </div>
+        );
+    };
 
     const LedgerView = () => {
         const groupedTransactions = useMemo(() => groupTransactionsByDate(transactions), [transactions]);

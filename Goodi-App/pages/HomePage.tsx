@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Task } from '../types';
 import { useUserData } from '../UserContext';
 import SidebarWidgets from '../components/SidebarWidgets';
+import { hasPremiumAccess } from '../utils/planUtils';
 
 // Standardized Button Styles
 const BTN_BASE = "flex-1 h-10 px-3 flex items-center justify-center gap-1.5 rounded-xl font-bold text-sm transition-all shadow-sm active:scale-95";
@@ -207,8 +208,8 @@ const HomePage: React.FC<HomePageProps> = ({ setPraiseTaskInfo }) => {
     // Check for active plan or active trial
     const isTrialActive = planTrialEndDate && new Date(planTrialEndDate) > new Date();
     const effectivePlan = (isTrialActive && plan === 'free') ? 'paid199' : plan;
-    // Child added task is a Premium feature (paid499)
-    const isPremium = effectivePlan === 'paid499';
+    // Child added task is a Premium feature
+    const isPremium = hasPremiumAccess(effectivePlan);
 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];

@@ -8,6 +8,8 @@ import Toast from './components/Toast';
 import LoginPage from './pages/LoginPage';
 import AppContent from './AppContent'; // Assuming your main app content is refactored into this component
 import LegalPage from './components/LegalPage';
+import PremiumUpgradePage from './pages/PremiumUpgradePage';
+import PremiumUpgradeFlow from './pages/PremiumUpgradeFlow';
 
 // --- Full Screen Spinner --- //
 const FullScreenSpinner: React.FC = () => (
@@ -44,20 +46,37 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      <Route 
-        path="/login" 
+      <Route
+        path="/login"
         element={currentUser ? <Navigate to="/" replace /> : <LoginPage />}
       />
-      <Route 
-        path="/privacy" 
+      <Route
+        path="/privacy"
         element={<LegalPage type="privacy" />}
       />
-            <Route 
-        path="/terms" 
+      <Route
+        path="/terms"
         element={<LegalPage type="terms" />}
       />
-      <Route 
-        path="/*" 
+      {/* Premium 升級頁面路由 */}
+      <Route
+        path="/premium"
+        element={
+          <ProtectedRoute>
+            <PremiumUpgradePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/premium/upgrade-flow"
+        element={
+          <ProtectedRoute>
+            <PremiumUpgradeFlow />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/*"
         element={
           <ProtectedRoute>
             <AppContent />

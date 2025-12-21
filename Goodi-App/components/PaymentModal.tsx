@@ -1,6 +1,8 @@
 
 import React, { useState } from 'react';
-import { Plan } from '../types';
+import { Plan, PricingTier, SubscriptionType } from '../types';
+import { getPricingTier, getSubscriptionType, getMonthlyPrice, getLifetimePrice } from '../utils/planUtils';
+import PromoCodeInput from './PromoCodeInput';
 
 interface PaymentModalProps {
     plan: Plan;
@@ -23,8 +25,24 @@ const planDetails: Record<Plan, { name: string; price: string }> = {
 const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }) => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [appliedPromoCode, setAppliedPromoCode] = useState('');
+    const [discountedPrice, setDiscountedPrice] = useState<number | null>(null);
+    const [discountPercentage, setDiscountPercentage] = useState(0);
 
     const details = planDetails[plan] || { name: '未知方案', price: '' };
+
+    // Get pricing info for promo code component
+    const pricingTier = getPricingTier(plan) as PricingTier;
+    const subscriptionType = getSubscriptionType(plan) as SubscriptionType;
+    const originalPrice = subscriptionType === 'monthly'
+        ? getMonthlyPrice(pricingTier)
+        : getLifetimePrice(pricingTier);
+
+    const handlePromoCodeApply = (code: string, finalPrice: number, percentage: number) => {
+        setAppliedPromoCode(code);
+        setDiscountedPrice(finalPrice);
+        setDiscountPercentage(percentage);
+    };
 
     const handleConfirm = () => {
         setIsProcessing(true);
@@ -37,9 +55,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
         }, 2000);
     };
 
+    const displayPrice = discountedPrice !== null ? discountedPrice : originalPrice;
+    const hasDiscount = discountedPrice !== null && discountedPrice < originalPrice;
+
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-2xl p-6 max-w-sm w-full transform transition-all animate-fade-in scale-95 border border-white/50">
+            <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-2xl p-6 max-w-md w-full transform transition-all animate-fade-in scale-95 border border-white/50">
                 {isSuccess ? (
                     <div className="text-center py-8">
                         <svg className="mx-auto h-16 w-16 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -47,6 +68,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
                         </svg>
                         <h2 className="text-2xl font-bold text-gray-800 mt-4">升級成功！</h2>
                         <p className="text-gray-600 mt-2">已為你解鎖新功能！</p>
+                        {appliedPromoCode && (
+                            <p className="text-sm text-purple-600 mt-1">
+                                ✨ 促銷碼 {appliedPromoCode} 已套用
+                            </p>
+                        )}
                         <button
                             onClick={onConfirm}
                             className="mt-6 w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors shadow-md"
@@ -58,10 +84,41 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
                     <>
                         <h2 className="text-xl font-bold text-gray-800 text-center mb-2">確認購買</h2>
                         <div className="bg-gray-50/50 rounded-lg p-4 my-4 text-center border border-gray-100">
-                            <p className="text-gray-600">你選擇的方案</p>
-                            <p className="text-2xl font-bold text-blue-600">{details.name}</p>
-                            <p className="font-semibold text-gray-700">{details.price}</p>
+                            <p className="text-gray-600 text-sm">你選擇的方案</p>
+                            <p className="text-2xl font-bold text-blue-600 mt-1">{details.name}</p>
+
+                            {hasDiscount ? (
+                                <div className="mt-2">
+                                    <p className="text-sm text-gray-500 line-through">
+                                        原價：NT$ {originalPrice.toLocaleString()}
+                                    </p>
+                                    <div className="flex items-center justify-center gap-2 mt-1">
+                                        <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
+                                            -{discountPercentage}%
+                                        </span>
+                                        <p className="text-xl font-bold text-green-600">
+                                            NT$ {displayPrice.toLocaleString()}
+                                            {subscriptionType === 'monthly' && '/月'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="font-semibold text-gray-700 mt-2">{details.price}</p>
+                            )}
                         </div>
+
+                        {/* Promo Code Input - Only for monthly plans */}
+                        {plan !== 'free' && subscriptionType === 'monthly' && originalPrice > 0 && (
+                            <div className="mb-4">
+                                <PromoCodeInput
+                                    currentPrice={originalPrice}
+                                    pricingTier={pricingTier}
+                                    subscriptionType={subscriptionType}
+                                    onApplyCode={handlePromoCodeApply}
+                                />
+                            </div>
+                        )}
+
                         <p className="text-xs text-gray-500 text-center mb-4">
                             這是一個模擬的付款流程，點擊確認後將直接為您升級方案。
                         </p>

@@ -1,7 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { useUserData } from '../UserContext';
-import { callGemini } from '../src/services/aiClient'; // ✅ 已修正路徑
+import { useAuth } from '../AuthContext';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
+// Helper: 取得週次 key（例如 2024-W51）
+function getWeekKey(date: Date = new Date()): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
 
 const Modal: React.FC<{
   children: React.ReactNode;
@@ -32,9 +44,12 @@ const Modal: React.FC<{
 
 const AiGrowthReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { userData } = useUserData();
+  const { currentUser } = useAuth();
+  const [report, setReport] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // 理论上这里只会在登入后被打开，但为了安全多一道保护
-  if (!userData) {
+  if (!userData || !currentUser) {
     return (
       <Modal onClose={onClose} title="Goodi 成長報告">
         <div className="p-6 text-center text-gray-600">
@@ -44,75 +59,41 @@ const AiGrowthReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
   }
 
-  const { userProfile, tasks, journalEntries, achievements } = userData;
-  const [report, setReport] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const { userProfile } = userData;
 
   useEffect(() => {
-    const generateReport = async () => {
+    const fetchReport = async () => {
       setIsLoading(true);
 
-      const recentCompletedTasks = tasks
-        .filter((t) => t.completed)
-        .slice(0, 10)
-        .map((t) => `- ${t.name}`); // 根據你的 task 結構有需要再調整
-
-      const recentJournalThemes = journalEntries
-        .slice(-5)
-        .filter((j) => j.author === 'user')
-        .map((j) => `- "${j.text}"`);
-
-      const recentAchievements = achievements
-        .filter((a) => a.unlocked)
-        .slice(-5)
-        .map((a) => `- ${a.name}`);
-
-      const prompt = `
-你是一位溫暖、有洞察力的兒童發展專家，名叫 Goodi。請根據以下資料，為一位名叫「${
-        userProfile.nickname
-      }」(${userProfile.age || '未知'}歲) 的孩子的家長，撰寫一份約 200-300 字的繁體中文成長週報。
-
-報告應包含以下部分，並使用 Markdown 格式化 (例如用 **標題** 和 - 列表)：
-1. **開頭問候**：親切地問候家長。
-2. **本週亮點**：根據孩子最近完成的任務和成就，給予具體、正面的讚美。強調他們的努力和進步。
-3. **心情悄悄話 (如果有的話)**：如果孩子有分享心事，請溫和地總結其中的情緒主題（不要直接引用原文），並建議家長可以如何關心與討論。如果沒有心事分享，可以鼓勵家長多與孩子聊天。
-4. **鼓勵與建議**：根據孩子的表現，提供 1-2 個具體、可行的鼓勵方向或親子互動建議。
-5. **結尾**：用一句溫暖的話語作結。
-
-請保持語氣正向、supportive、並且充滿鼓勵。避免使用負面或指責的詞語。
-
----
-**近期完成的任務：**
-${recentCompletedTasks.length > 0 ? recentCompletedTasks.join('\n') : '無'}
-
-**近期解鎖的成就：**
-${recentAchievements.length > 0 ? recentAchievements.join('\n') : '無'}
-
-**近期心事分享的主題：**
-${recentJournalThemes.length > 0 ? recentJournalThemes.join('\n') : '無'}
----
-      `;
-
       try {
-        // ✅ 呼叫後端 Cloud Function，前端不再接觸 API Key
-        const responseText = await callGemini(prompt);
-        setReport(responseText);
+        // 1. 取得本週週次 key
+        const weekKey = getWeekKey();
+
+        // 2. 優先從 Firestore 讀取快取
+        const reportDoc = await getDoc(
+          doc(db, 'users', currentUser.uid, 'weeklyReports', weekKey)
+        );
+
+        if (reportDoc.exists()) {
+          const data = reportDoc.data();
+          setReport(data.content || '');
+          setIsLoading(false);
+          return;
+        }
+
+        // 3. 若無快取，顯示提示（不再即時生成，節省 API）
+        setReport('📅 本週成長報告尚未生成\n\n報告會在每週六凌晨自動生成，屆時您登入即可查看！\n\n在等待的同時，繼續陪伴孩子一起成長吧！🌟');
+        setIsLoading(false);
+
       } catch (error) {
-        console.error('AI Growth Report Error:', error);
-        setReport('抱歉，產生報告時發生錯誤。請稍後再試。');
-      } finally {
+        console.error('AI Growth Report fetch failed:', error);
+        setReport('抱歉，讀取報告時發生錯誤。請稍後再試。');
         setIsLoading(false);
       }
     };
 
-    generateReport();
-  }, [
-    userProfile.nickname,
-    userProfile.age,
-    JSON.stringify(tasks),
-    JSON.stringify(journalEntries),
-    JSON.stringify(achievements),
-  ]);
+    fetchReport();
+  }, [currentUser.uid]);
 
   const renderMarkdown = (text: string) => {
     const html = text
@@ -140,7 +121,7 @@ ${recentJournalThemes.length > 0 ? recentJournalThemes.join('\n') : '無'}
               className="w-16 h-16 mx-auto animate-bounce"
             />
             <p className="mt-4 font-semibold text-gray-600">
-              Goodi 正在為您分析與撰寫報告...
+              Goodi 正在讀取報告...
             </p>
           </div>
         ) : (

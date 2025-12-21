@@ -13,192 +13,297 @@ const SOUND_OPTIONS: { id: SoundOption, label: string }[] = [
 ];
 
 const FocusTimerPage: React.FC = () => {
-  const { userData, handleFocusSessionComplete } = useUserData();
+    const { userData, handleFocusSessionComplete } = useUserData();
 
-  const [selectedDuration, setSelectedDuration] = useState(DEFAULT_DURATION);
-  const [timeLeft, setTimeLeft] = useState(DEFAULT_DURATION);
-  const [isActive, setIsActive] = useState(false);
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [selectedSound, setSelectedSound] = useState<SoundOption>('melody');
-  const audioContextRef = useRef<AudioContext | null>(null);
+    const [selectedDuration, setSelectedDuration] = useState(DEFAULT_DURATION);
+    const [timeLeft, setTimeLeft] = useState(DEFAULT_DURATION);
+    const [isActive, setIsActive] = useState(false);
+    const [isCompleted, setIsCompleted] = useState(false);
+    const [selectedSound, setSelectedSound] = useState<SoundOption>('melody');
+    const [isAlarmRinging, setIsAlarmRinging] = useState(false);
+    const [customMinutes, setCustomMinutes] = useState<string>('');
+    const [showCustomInput, setShowCustomInput] = useState(false);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const alarmIntervalRef = useRef<number | null>(null);
 
-  const playSound = useCallback((sound: SoundOption) => {
-    if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const audioContext = audioContextRef.current;
-    if (audioContext.state === 'suspended') audioContext.resume();
-    
-    const playNote = (frequency: number, startTime: number, duration: number) => {
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(frequency, startTime);
-        gain.gain.setValueAtTime(1, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.00001, startTime + duration);
-        osc.connect(gain);
-        gain.connect(audioContext.destination);
-        osc.start(startTime);
-        osc.stop(startTime + duration);
-    };
+    const playSound = useCallback((sound: SoundOption) => {
+        if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioContext = audioContextRef.current;
+        if (audioContext.state === 'suspended') audioContext.resume();
 
-    const now = audioContext.currentTime;
-    switch (sound) {
-        case 'melody': // C4-E4-G4
-            playNote(261.63, now, 0.2);
-            playNote(329.63, now + 0.2, 0.2);
-            playNote(392.00, now + 0.4, 0.3);
-            break;
-        case 'bell': // C6
-            playNote(1046.50, now, 0.8);
-            break;
-        case 'chord': // C4 major chord
-            playNote(261.63, now, 0.5); // C4
-            playNote(329.63, now, 0.5); // E4
-            playNote(392.00, now, 0.5); // G4
-            break;
+        const playNote = (frequency: number, startTime: number, duration: number) => {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(frequency, startTime);
+            gain.gain.setValueAtTime(1, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.00001, startTime + duration);
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+        };
+
+        const now = audioContext.currentTime;
+        switch (sound) {
+            case 'melody': // C4-E4-G4
+                playNote(261.63, now, 0.2);
+                playNote(329.63, now + 0.2, 0.2);
+                playNote(392.00, now + 0.4, 0.3);
+                break;
+            case 'bell': // C6
+                playNote(1046.50, now, 0.8);
+                break;
+            case 'chord': // C4 major chord
+                playNote(261.63, now, 0.5); // C4
+                playNote(329.63, now, 0.5); // E4
+                playNote(392.00, now, 0.5); // G4
+                break;
+        }
+    }, []);
+
+    useEffect(() => {
+        let interval: number | null = null;
+        if (isActive && timeLeft > 0) {
+            interval = window.setInterval(() => setTimeLeft(time => time - 1), 1000);
+        } else if (timeLeft === 0 && isActive) {
+            setIsActive(false);
+            setIsCompleted(true);
+            setIsAlarmRinging(true); // 啟動持續鈴聲
+            handleFocusSessionComplete(selectedDuration);
+        }
+        return () => { if (interval) clearInterval(interval); };
+    }, [isActive, timeLeft, selectedDuration, handleFocusSessionComplete, setIsAlarmRinging]);
+
+    // 鈴聲循環播放邏輯
+    useEffect(() => {
+        if (isAlarmRinging) {
+            // 立即播放一次
+            playSound(selectedSound);
+
+            // 設定循環播放（每2秒播放一次）
+            alarmIntervalRef.current = window.setInterval(() => {
+                playSound(selectedSound);
+            }, 2000);
+        } else {
+            // 停止播放
+            if (alarmIntervalRef.current) {
+                clearInterval(alarmIntervalRef.current);
+                alarmIntervalRef.current = null;
+            }
+        }
+
+        return () => {
+            if (alarmIntervalRef.current) {
+                clearInterval(alarmIntervalRef.current);
+            }
+        };
+    }, [isAlarmRinging, selectedSound, playSound]);
+
+    const resetTimer = useCallback(() => {
+        setIsActive(false);
+        setIsCompleted(false);
+        setIsAlarmRinging(false); // 停止鈴聲
+        setTimeLeft(selectedDuration);
+    }, [selectedDuration, setIsAlarmRinging]);
+
+    const stopAlarm = useCallback(() => {
+        setIsAlarmRinging(false);
+    }, []);
+
+    const handleCustomTimeSubmit = useCallback(() => {
+        const minutes = parseInt(customMinutes, 10);
+        if (minutes && minutes > 0 && minutes <= 120) {
+            const duration = minutes * 60;
+            setSelectedDuration(duration);
+            setTimeLeft(duration);
+            setIsCompleted(false);
+            setShowCustomInput(false);
+            setCustomMinutes('');
+        } else {
+            alert('請輸入 1-120 之間的分鐘數');
+        }
+    }, [customMinutes]);
+
+    const handleSoundSelection = (soundId: SoundOption) => {
+        if (isActive) return;
+        setSelectedSound(soundId);
+        playSound(soundId);
     }
-  }, []);
 
-  useEffect(() => {
-    let interval: number | null = null;
-    if (isActive && timeLeft > 0) {
-      interval = window.setInterval(() => setTimeLeft(time => time - 1), 1000);
-    } else if (timeLeft === 0 && isActive) {
-      setIsActive(false);
-      setIsCompleted(true);
-      playSound(selectedSound);
-      handleFocusSessionComplete(selectedDuration);
-    }
-    return () => { if (interval) clearInterval(interval); };
-  }, [isActive, timeLeft, selectedSound, selectedDuration, handleFocusSessionComplete, playSound]);
+    const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    const progress = ((selectedDuration - timeLeft) / selectedDuration) * 100;
 
-  const resetTimer = useCallback(() => {
-    setIsActive(false);
-    setIsCompleted(false);
-    setTimeLeft(selectedDuration);
-  }, [selectedDuration]);
+    return (
+        <div className="animate-fade-in h-full flex justify-center items-start p-2">
+            {/* Main Card - Optimized Layout */}
+            <div className="bg-white/60 backdrop-blur-md rounded-[2rem] shadow-2xl border border-white/50 p-6 w-full max-w-3xl flex flex-col items-center gap-1 relative">
 
-  const handleSoundSelection = (soundId: SoundOption) => {
-    if (isActive) return;
-    setSelectedSound(soundId);
-    playSound(soundId);
-  }
+                {/* Header moved inside/compact */}
+                <div className="absolute top-4 left-6 text-gray-600 flex items-center gap-2 opacity-70">
+                    <img src="https://api.iconify.design/twemoji/stopwatch.svg" className="w-6 h-6" />
+                    <span className="font-bold">專注番茄鐘</span>
+                </div>
 
-  const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-  const progress = ((selectedDuration - timeLeft) / selectedDuration) * 100;
+                <div className="flex flex-row items-center justify-center w-full gap-8 md:gap-16 mt-4">
+                    {/* Left: Timer Circle */}
+                    <div className="flex-shrink-0">
+                        <div className="relative w-64 h-64 drop-shadow-xl">
+                            <svg className="w-full h-full" viewBox="0 0 100 100">
+                                <circle className="text-white/40" strokeWidth="6" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
+                                <circle
+                                    className="text-orange-500"
+                                    strokeWidth="6"
+                                    strokeDasharray="283"
+                                    strokeDashoffset={283 - (progress / 100) * 283}
+                                    strokeLinecap="round"
+                                    stroke="currentColor"
+                                    fill="transparent"
+                                    r="45" cx="50" cy="50"
+                                    style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', transition: 'stroke-dashoffset 1s linear' }}
+                                />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                {isCompleted ? (
+                                    <>
+                                        <div className={isAlarmRinging ? "animate-bounce" : ""}>
+                                            <img src="https://api.iconify.design/twemoji/party-popper.svg" alt="完成" className="w-24 h-24" />
+                                        </div>
+                                        {isAlarmRinging && (
+                                            <button
+                                                onClick={stopAlarm}
+                                                className="mt-4 px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-black rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2 animate-pulse"
+                                            >
+                                                <span className="text-2xl">🔔</span> 關閉鈴聲
+                                            </button>
+                                        )}
+                                    </>
+                                ) : (
+                                    <span className="text-7xl font-bold text-gray-800 tracking-tight font-mono drop-shadow-sm">{formatTime(timeLeft)}</span>
+                                )}
+                                <p className="text-gray-600 text-base mt-2 font-bold bg-white/40 px-3 py-0.5 rounded-full">
+                                    {isCompleted ? (isAlarmRinging ? "🔔 鈴聲提醒中..." : "任務完成！") : (isActive ? "保持專注..." : "準備開始")}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
-  return (
-    <div className="animate-fade-in h-full flex justify-center items-start p-2">
-        {/* Main Card - Optimized Layout */}
-        <div className="bg-white/60 backdrop-blur-md rounded-[2rem] shadow-2xl border border-white/50 p-6 w-full max-w-3xl flex flex-col items-center gap-1 relative">
-             
-             {/* Header moved inside/compact */}
-            <div className="absolute top-4 left-6 text-gray-600 flex items-center gap-2 opacity-70">
-                <img src="https://api.iconify.design/twemoji/stopwatch.svg" className="w-6 h-6" />
-                <span className="font-bold">專注番茄鐘</span>
-            </div>
+                    {/* Right: Controls Container */}
+                    <div className="flex-1 w-full space-y-4 flex flex-col justify-center max-w-xs">
+                        {/* Duration Selection */}
+                        <div className="grid grid-cols-2 gap-3 bg-white/40 p-3 rounded-2xl backdrop-blur-sm border border-white/50 shadow-inner">
+                            {Object.entries(DURATIONS).map(([label, duration]) => {
+                                const isSelected = selectedDuration === duration;
+                                const mins = duration / 60;
+                                const count = userData.focusSessionCounts?.[mins] || 0;
 
-            <div className="flex flex-row items-center justify-center w-full gap-8 md:gap-16 mt-4">
-                {/* Left: Timer Circle */}
-                <div className="flex-shrink-0">
-                    <div className="relative w-64 h-64 drop-shadow-xl">
-                        <svg className="w-full h-full" viewBox="0 0 100 100">
-                            <circle className="text-white/40" strokeWidth="6" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50"/>
-                            <circle 
-                                className="text-orange-500" 
-                                strokeWidth="6" 
-                                strokeDasharray="283" 
-                                strokeDashoffset={283 - (progress / 100) * 283} 
-                                strokeLinecap="round" 
-                                stroke="currentColor" 
-                                fill="transparent" 
-                                r="45" cx="50" cy="50" 
-                                style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', transition: 'stroke-dashoffset 1s linear' }}
-                            />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            {isCompleted ? (
-                                <div className="animate-bounce">
-                                    <img src="https://api.iconify.design/twemoji/party-popper.svg" alt="完成" className="w-24 h-24" />
+                                return (
+                                    <button
+                                        key={label}
+                                        onClick={() => { if (!isActive) { setSelectedDuration(duration); setTimeLeft(duration); setIsCompleted(false); } }}
+                                        disabled={isActive}
+                                        className={`py-3 px-1 rounded-xl flex flex-col items-center justify-center transition-all ${isSelected && !isActive && !showCustomInput ? 'bg-orange-500 text-white shadow-md scale-105 ring-2 ring-orange-200' : 'text-gray-600 hover:bg-white/60 bg-white/30 border border-transparent'}`}
+                                    >
+                                        <span className="font-bold text-sm mb-0.5">{label}</span>
+                                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-black/5 text-gray-500'}`}>
+                                            達成 {count} 次
+                                        </span>
+                                    </button>
+                                );
+                            })}
+
+                            {/* Custom Time Button */}
+                            <button
+                                onClick={() => {
+                                    if (!isActive) {
+                                        setShowCustomInput(!showCustomInput);
+                                        if (!showCustomInput) { // If showing custom input, deselect other durations
+                                            setSelectedDuration(0); // A value that won't match predefined durations
+                                        } else { // If hiding custom input, reset to default or previously selected
+                                            setSelectedDuration(DEFAULT_DURATION);
+                                            setTimeLeft(DEFAULT_DURATION);
+                                        }
+                                        setIsCompleted(false);
+                                    }
+                                }}
+                                disabled={isActive}
+                                className={`py-3 px-1 rounded-xl flex flex-col items-center justify-center transition-all ${showCustomInput && !isActive ? 'bg-blue-500 text-white shadow-md scale-105 ring-2 ring-blue-200' : 'text-gray-600 hover:bg-white/60 bg-white/30 border border-transparent'}`}
+                            >
+                                <span className="font-bold text-sm mb-0.5">自訂</span>
+                                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${showCustomInput ? 'bg-white/20 text-white' : 'bg-black/5 text-gray-500'}`}>
+                                    ⏱️
+                                </span>
+                            </button>
+                        </div>
+
+                        {/* Custom Time Input */}
+                        {showCustomInput && !isActive && (
+                            <div className="bg-white/60 p-4 rounded-2xl border border-white/50 shadow-inner">
+                                <p className="text-sm text-gray-700 font-bold mb-2 text-center">⏱️ 請輸入分鐘數（1-120）</p>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="120"
+                                        value={customMinutes}
+                                        onChange={(e) => setCustomMinutes(e.target.value)}
+                                        placeholder="分鐘"
+                                        className="flex-1 px-3 py-2 rounded-lg border-2 border-blue-300 focus:border-blue-500 focus:outline-none text-center font-bold text-gray-800"
+                                    />
+                                    <button
+                                        onClick={handleCustomTimeSubmit}
+                                        className="px-5 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors"
+                                    >
+                                        確定
+                                    </button>
                                 </div>
-                            ) : (
-                                <span className="text-7xl font-bold text-gray-800 tracking-tight font-mono drop-shadow-sm">{formatTime(timeLeft)}</span>
-                            )}
-                            <p className="text-gray-600 text-base mt-2 font-bold bg-white/40 px-3 py-0.5 rounded-full">
-                                {isCompleted ? "任務完成！" : (isActive ? "保持專注..." : "準備開始")}
-                            </p>
+                            </div>
+                        )}
+
+                        {/* Sound Selection */}
+                        <div className="flex gap-1 bg-white/40 p-1.5 rounded-xl border border-white/50">
+                            {SOUND_OPTIONS.map(({ id, label }) => (
+                                <button
+                                    key={id}
+                                    onClick={() => handleSoundSelection(id)}
+                                    disabled={isActive}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${selectedSound === id ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:bg-white/30'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Main Action Buttons */}
+                        <div className="flex gap-3 mt-2">
+                            <button
+                                onClick={() => { if (!isCompleted) setIsActive(!isActive); }}
+                                disabled={isCompleted}
+                                className={`flex-1 py-4 rounded-2xl font-black text-white text-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isActive ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} disabled:bg-gray-300 disabled:cursor-not-allowed`}
+                            >
+                                {isActive ? (
+                                    <><img src="https://api.iconify.design/solar/pause-bold.svg" className="w-6 h-6 invert" /> 暫停</>
+                                ) : (
+                                    <><img src="https://api.iconify.design/solar/play-bold.svg" className="w-6 h-6 invert" /> 開始</>
+                                )}
+                            </button>
+                            <button
+                                onClick={resetTimer}
+                                className="flex-shrink-0 px-5 py-4 rounded-2xl font-bold bg-white/70 border border-white/60 text-gray-700 text-lg shadow-md transition-all active:scale-95 hover:bg-white/90 flex items-center justify-center"
+                            >
+                                <img src="https://api.iconify.design/solar/restart-bold.svg" className="w-7 h-7 opacity-60" />
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Right: Controls Container */}
-                <div className="flex-1 w-full space-y-4 flex flex-col justify-center max-w-xs">
-                    {/* Duration Selection */}
-                    <div className="grid grid-cols-2 gap-3 bg-white/40 p-3 rounded-2xl backdrop-blur-sm border border-white/50 shadow-inner">
-                        {Object.entries(DURATIONS).map(([label, duration]) => {
-                            const isSelected = selectedDuration === duration;
-                            const mins = duration / 60;
-                            const count = userData.focusSessionCounts?.[mins] || 0;
-                            
-                            return (
-                                <button 
-                                    key={label} 
-                                    onClick={() => { if (!isActive) { setSelectedDuration(duration); setTimeLeft(duration); setIsCompleted(false); }}} 
-                                    disabled={isActive} 
-                                    className={`py-3 px-1 rounded-xl flex flex-col items-center justify-center transition-all ${isSelected && !isActive ? 'bg-orange-500 text-white shadow-md scale-105 ring-2 ring-orange-200' : 'text-gray-600 hover:bg-white/60 bg-white/30 border border-transparent'}`}
-                                >
-                                    <span className="font-bold text-sm mb-0.5">{label}</span>
-                                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-black/5 text-gray-500'}`}>
-                                        達成 {count} 次
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* Sound Selection */}
-                    <div className="flex gap-1 bg-white/40 p-1.5 rounded-xl border border-white/50">
-                        {SOUND_OPTIONS.map(({id, label}) => (
-                            <button 
-                                key={id} 
-                                onClick={() => handleSoundSelection(id)} 
-                                disabled={isActive} 
-                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${selectedSound === id ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:bg-white/30'}`}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Main Action Buttons */}
-                    <div className="flex gap-3 mt-2">
-                        <button 
-                            onClick={() => { if (!isCompleted) setIsActive(!isActive); }} 
-                            disabled={isCompleted} 
-                            className={`flex-1 py-4 rounded-2xl font-black text-white text-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isActive ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} disabled:bg-gray-300 disabled:cursor-not-allowed`}
-                        >
-                            {isActive ? (
-                                <><img src="https://api.iconify.design/solar/pause-bold.svg" className="w-6 h-6 invert" /> 暫停</>
-                            ) : (
-                                <><img src="https://api.iconify.design/solar/play-bold.svg" className="w-6 h-6 invert" /> 開始</>
-                            )}
-                        </button>
-                        <button 
-                            onClick={resetTimer} 
-                            className="flex-shrink-0 px-5 py-4 rounded-2xl font-bold bg-white/70 border border-white/60 text-gray-700 text-lg shadow-md transition-all active:scale-95 hover:bg-white/90 flex items-center justify-center"
-                        >
-                            <img src="https://api.iconify.design/solar/restart-bold.svg" className="w-7 h-7 opacity-60" />
-                        </button>
-                    </div>
+                {/* Disclaimer */}
+                <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200 text-yellow-800 px-4 py-3 rounded-xl text-sm font-medium max-w-3xl w-full text-center shadow-sm mt-2">
+                    為了得到最佳體驗，僅在番茄鐘計時，僅在本畫面有效，跳離後番茄鐘中失效
                 </div>
             </div>
-            
-            {/* Disclaimer */}
-            <div className="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200 text-yellow-800 px-4 py-3 rounded-xl text-sm font-medium max-w-3xl w-full text-center shadow-sm mt-2">
-                為了得到最佳體驗，僅在番茄鐘計時，僅在本畫面有效，跳離後番茄鐘中失效
-            </div>
         </div>
-    </div>
-  );
+    );
 };
 
 export default FocusTimerPage;

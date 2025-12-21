@@ -70,6 +70,16 @@ const LoginPage: React.FC<LoginPageProps> = () => {
       const result = await signInWithPopup(auth, googleProvider);
       console.log("[Login] Google login SUCCESS! User:", result.user.uid);
       console.log("[Login] Email:", result.user.email);
+
+      // 📊 追蹤登入事件
+      const { trackLogin, trackSignUp } = await import('../utils/analytics');
+      const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+      if (isNewUser) {
+        trackSignUp('google');
+      } else {
+        trackLogin('google');
+      }
+
       // AuthContext will detect the user and App.tsx will redirect
     } catch (error: any) {
       console.error("[Login] Google login ERROR:", error);

@@ -1,5 +1,6 @@
 
 import { UserData } from '../types';
+import { isLifetimePlan, hasPremiumAccess } from '../utils/planUtils';
 
 export interface GeminiApiConfig {
     apiKey: string;
@@ -8,16 +9,40 @@ export interface GeminiApiConfig {
     lastValidated: Date;
 }
 
-// This is a mock validation function. In a real application, you would make an API call to Google AI Studio to validate the key.
+/**
+ * Validate Gemini API Key by making an actual API call
+ * This ensures the key is not only properly formatted but also valid and active
+ */
 export const validateGeminiApiKey = async (key: string): Promise<boolean> => {
-    if (key && key.length > 10) {
-        return true;
+    try {
+        // Basic format validation
+        if (!key || key.trim().length < 20) {
+            return false;
+        }
+
+        // Import Gemini SDK dynamically to avoid bundle size impact
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+
+        // Initialize with the provided API key
+        const genAI = new GoogleGenerativeAI(key.trim());
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+        // Make a minimal test call to verify the key works
+        const result = await model.generateContent("Test");
+        const response = await result.response;
+        const text = response.text();
+
+        // If we got a response, the key is valid
+        return !!text;
+    } catch (error) {
+        // Log error without exposing the API key
+        console.error('API Key validation failed (safe log - key not shown)');
+        return false;
     }
-    return false;
 };
 
 export const getGeminiApiConfig = async (userData: UserData): Promise<GeminiApiConfig | null> => {
-    if (userData.plan.includes('lifetime')) {
+    if (isLifetimePlan(userData.plan)) {
         if (!userData.geminiApiKey) return null;
         const isValid = await validateGeminiApiKey(userData.geminiApiKey);
         return {
@@ -26,7 +51,7 @@ export const getGeminiApiConfig = async (userData: UserData): Promise<GeminiApiC
             isValid,
             lastValidated: new Date()
         };
-    } else if (userData.plan.includes('premium')) {
+    } else if (hasPremiumAccess(userData.plan)) {
         // In a real app, you'd fetch this from a secure backend.
         const goodiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
         return {

@@ -2,9 +2,11 @@ import React, { createContext, useState, useCallback, useEffect, useRef, useMemo
 import { Page, Task, Reward, JournalEntry, Achievement, Plan, UserProfile, ToastMessage, ScoreEntry, Subject, TestType, InventoryItem, Transaction, GachaponPrize, KeyEvent, FocusSessionCounts, UserData } from './types';
 import { GoogleGenAI } from "@google/genai";
 import { FirebaseGenAI } from './services/firebaseAI';
-import { db } from './firebase';
+import { db, functions } from './firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from './AuthContext';
+import { getLocalGoodiResponse } from './utils/dailyFallbackData';
 
 // --- INITIAL DATA (unchanged) ---
 const initialAchievementsData: Achievement[] = [
@@ -91,7 +93,8 @@ const initialUserData: Omit<UserData, 'lastLoginDate'> = {
   inventory: [], transactions: [], journalEntries: [], scoreHistory: [], sharedMessages: [], wishes: [],
   plan: 'free', parentPin: null, shopRewards: initialShopRewards, gachaponPrizes: initialGachaponPrizes, keyEvents: [],
   focusSessionCounts: { 5: 0, 10: 0, 15: 0, 25: 0 },
-  frozenHabitDates: [], referralCount: 0,
+  frozenHabitDates: [],
+  referralCount: 0,
   planTrialEndDate: null,
   parentIntroDismissed: false,
   subscriptionType: 'monthly',
@@ -99,6 +102,13 @@ const initialUserData: Omit<UserData, 'lastLoginDate'> = {
   childrenCount: 1,
   maxChildren: 1,
   zhuyinMode: 'auto',
+  // Referral System Initial Values
+  referralCode: undefined, // Will be generated on first user creation
+  redeemCodes: [],
+  referredUsers: [],
+  canAddReferralCode: true,
+  isTrialUser: false,
+  createdAt: new Date().toISOString(),
 };
 // --- END INITIAL DATA ---
 
@@ -169,6 +179,14 @@ interface UserDataContextType {
   handleAddKeyEvent: (text: string, date: string) => void;
   handleDeleteKeyEvent: (id: number) => void;
   handleMakeWish: (wish: string) => boolean;
+  // Referral System Handlers
+  handleApplyReferralCode: (code: string) => Promise<{ success: boolean; message: string }>;
+  handleUseRedeemCode: (code: string, monthsToRedeem?: number) => Promise<{ success: boolean; message: string }>;
+  handleCheckTrialExpiry: () => void;
+  // Gemini API Key Management (for lifetime premium users)
+  handleSetGeminiApiKey: (key: string) => Promise<void>;
+  handleValidateGeminiApiKey: () => Promise<boolean>;
+  handleTriggerYesterdaySummary: () => Promise<boolean>;
 }
 
 const UserDataContext = createContext<UserDataContextType | undefined>(undefined);
@@ -228,9 +246,21 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
       } else {
         console.log('[UserContext] Firestore document does not exist. Creating it...');
         try {
-          const cleanData = removeUndefined(initialUserData);
+          // Generate referral code for new users
+          const { generateReferralCode } = await import('./utils/referralUtils');
+          const newReferralCode = generateReferralCode('GD'); // GD prefix for Goodi Default
+
+          const initialDataWithReferralCode = {
+            ...initialUserData,
+            referralCode: newReferralCode,
+            createdAt: new Date().toISOString(),
+          };
+
+          const cleanData = removeUndefined(initialDataWithReferralCode);
           const fullData: UserData = { ...cleanData, lastLoginDate: new Date().toISOString().split('T')[0] };
           await setDoc(docRef, fullData);
+
+          console.log('[UserContext] Created new user with referral code:', newReferralCode);
         } catch (error) {
           console.error('[UserContext] Error creating initial user document:', error);
           addToast('建立使用者資料時發生錯誤');
@@ -297,6 +327,31 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
         ...prev,
         tasks: resetTasks
       }) : null);
+
+      // Check trial expiry (disable trial tasks if needed)
+      if (userData.isTrialUser && userData.planTrialEndDate) {
+        const trialEndDate = new Date(userData.planTrialEndDate);
+        if (new Date() > trialEndDate) {
+          // Trial has expired, disable trial tasks
+          const updatedTasks = resetTasks.map(task => {
+            if (task.createdDuringTrial && new Date() > new Date(task.trialExpiryDate!)) {
+              return {
+                ...task,
+                disabled: true,
+                disabledReason: '試用期已結束，升級至高級版本以繼續使用此任務'
+              };
+            }
+            return task;
+          });
+
+          setUserData(prev => prev ? ({
+            ...prev,
+            tasks: updatedTasks,
+            isTrialUser: false
+          }) : null);
+        }
+      }
+
       localStorage.setItem('goodi_last_daily_check', todayStr);
     }
   }, [userData]);
@@ -534,25 +589,32 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
     updateUserData({ journalEntries: [...userData.journalEntries, userEntry] });
 
     try {
-      // 使用新的優化 Cloud Function - 將安全檢查和回應合併為一次呼叫
-      const { httpsCallable } = await import('firebase/functions');
-      const { functions } = await import('./firebase');
-      const generateSafeResponse = httpsCallable(functions, 'generateSafeResponse');
+      // 使用統一的 AI 調用服務
+      const { callAiFunction } = await import('./src/services/aiClient');
 
-      const result = await generateSafeResponse({
+      const data = await callAiFunction('generateSafeResponse', {
         userMessage: text,
         userNickname: userData.userProfile.nickname || '小朋友'
-      });
+      }) as { needsAttention: boolean; response: string };
 
-      const data = result.data as { needsAttention: boolean; response: string };
-
-      // 如果需要關注,發送警示給家長
+      // 如果需要關注,發送警示給家長，同時給孩子一個溫暖的回應
       if (data.needsAttention) {
+        // 1. 發送警示給家長
         updateUserData({
-          sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...userData.sharedMessages],
-          journalEntries: [...userData.journalEntries, userEntry]
+          sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...userData.sharedMessages]
         });
-        return; // 不生成 AI 回應
+
+        // 2. 同時給孩子一個溫暖、關懷的回應（不讓孩子感到被忽略）
+        const supportiveResponse = "謝謝你願意把心事告訴我，我知道有時候生活不太容易。不管發生什麼事，Goodi 都會在這裡陪伴你喔。你很勇敢，願意說出來就是很棒的一步！❤️";
+        const goodiEntry: JournalEntry = {
+          id: Date.now() + 1,
+          text: supportiveResponse,
+          date: new Date().toISOString(),
+          author: 'goodi'
+        };
+        // Update journalEntries again to include the Goodi's supportive response
+        updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
+        return;
       }
 
       // 正常回應
@@ -564,15 +626,22 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
       };
       updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
 
-    } catch (e) {
-      console.error("WhisperTree error:", e);
-      const errorEntry: JournalEntry = {
+    } catch (e: any) {
+      console.error("WhisperTree network/cloud error, using local fallback:", e);
+      // 網路斷線或雲端異常時，啟用「本地溫暖引擎」
+      const errorMsg = e.message || "";
+      const localResponse = getLocalGoodiResponse(text);
+      const displayText = errorMsg.includes('次數已達上限')
+        ? "Goodi 今天說了好多話，休息一下，明天再陪你聊更多好嗎？"
+        : localResponse;
+
+      const goodiEntry: JournalEntry = {
         id: Date.now() + 1,
-        text: "嗚，Goodi 的訊號好像不太好，等一下再試一次好嗎？",
+        text: displayText,
         date: new Date().toISOString(),
         author: 'goodi'
       };
-      updateUserData({ journalEntries: [...userData.journalEntries, userEntry, errorEntry] });
+      updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
     }
   };
 
@@ -600,6 +669,16 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
       consecutiveCompletions: 0,
       addedBy: 'parent'
     };
+
+    // 如果是試用用戶且在試用期內，標記任務
+    if (userData.isTrialUser && userData.planTrialEndDate) {
+      const trialEndDate = new Date(userData.planTrialEndDate);
+      if (new Date() < trialEndDate) {
+        newTask.createdDuringTrial = true;
+        newTask.trialExpiryDate = userData.planTrialEndDate;
+      }
+    }
+
     updateUserData({ tasks: [...userData.tasks, newTask] });
     addToast('任務已新增！');
   };
@@ -618,14 +697,58 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
 
   const handleAddMultipleTasks = (newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => {
     if (!userData) return;
-    const tasksToAdd = newTasks.map(task => ({ ...task, id: Date.now() + Math.random(), completed: false, isHabit: task.category !== '學習' && task.category !== '特殊', consecutiveCompletions: 0, addedBy: 'parent' as const }));
+
+    const tasksToAdd = newTasks.map(task => {
+      const newTask: Task = {
+        ...task,
+        id: Date.now() + Math.random(),
+        completed: false,
+        isHabit: task.category !== '學習' && task.category !== '特殊',
+        consecutiveCompletions: 0,
+        addedBy: 'parent' as const
+      };
+
+      // 如果是試用用戶且在試用期內，標記任務
+      if (userData.isTrialUser && userData.planTrialEndDate) {
+        const trialEndDate = new Date(userData.planTrialEndDate);
+        if (new Date() < trialEndDate) {
+          newTask.createdDuringTrial = true;
+          newTask.trialExpiryDate = userData.planTrialEndDate;
+        }
+      }
+
+      return newTask;
+    });
+
     updateUserData({ tasks: [...userData.tasks, ...tasksToAdd] });
     addToast(`成功匯入 ${newTasks.length} 個任務！`);
   };
 
   const handleOverwriteTasks = (newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => {
     if (!userData) return;
-    const tasksToAdd = newTasks.map(task => ({ ...task, id: Date.now() + Math.random(), completed: false, isHabit: task.category !== '學習' && task.category !== '特殊', consecutiveCompletions: 0, addedBy: 'parent' as const }));
+
+    const tasksToAdd = newTasks.map(task => {
+      const newTask: Task = {
+        ...task,
+        id: Date.now() + Math.random(),
+        completed: false,
+        isHabit: task.category !== '學習' && task.category !== '特殊',
+        consecutiveCompletions: 0,
+        addedBy: 'parent' as const
+      };
+
+      // 如果是試用用戶且在試用期內，標記任務
+      if (userData.isTrialUser && userData.planTrialEndDate) {
+        const trialEndDate = new Date(userData.planTrialEndDate);
+        if (new Date() < trialEndDate) {
+          newTask.createdDuringTrial = true;
+          newTask.trialExpiryDate = userData.planTrialEndDate;
+        }
+      }
+
+      return newTask;
+    });
+
     updateUserData({ tasks: tasksToAdd });
     addToast(`成功匯入並覆蓋了 ${newTasks.length} 個任務！`);
   };
@@ -658,6 +781,15 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
       ...(schedule ? { schedule } : {}),
       ...(dateRange ? { dateRange } : {})
     };
+
+    // 如果是試用用戶且在試用期內，標記任務
+    if (userData.isTrialUser && userData.planTrialEndDate) {
+      const trialEndDate = new Date(userData.planTrialEndDate);
+      if (new Date() < trialEndDate) {
+        newTask.createdDuringTrial = true;
+        newTask.trialExpiryDate = userData.planTrialEndDate;
+      }
+    }
     updateUserData({ tasks: [...userData.tasks, newTask] });
     addToast(`新增任務：「${text}」！`);
   };
@@ -745,6 +877,327 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
     updateUserData({ referralCount: newCount });
     if (newCount >= 1) unlockAchievement('referral_1');
   };
+
+  // === REFERRAL SYSTEM HANDLERS ===
+
+  /**
+   * Apply a referral code (for new users or补登)
+   */
+  const handleApplyReferralCode = useCallback(async (code: string): Promise<{ success: boolean; message: string }> => {
+    if (!userData || !currentUser) {
+      return { success: false, message: '用戶資料未載入' };
+    }
+
+    try {
+      const { validateReferralCode, normalizeReferralCode, canAddReferralCode, calculateTrialEndDate } =
+        await import('./utils/referralUtils');
+
+      const normalizedCode = normalizeReferralCode(code);
+
+      // 🧪 TEST MODE: Check for test code FIRST before format validation
+      if (normalizedCode === 'GD-TEST01') {
+        // 檢查是否已使用過推薦碼
+        if (userData.referredBy) {
+          return { success: false, message: '您已經使用過推薦碼了，每個帳號只能使用一次' };
+        }
+
+        // 檢查是否可以補登（7天內）
+        if (!canAddReferralCode(userData)) {
+          return { success: false, message: '推薦碼補登期限已過（僅限註冊後 7 天內）' };
+        }
+
+        const trialEndDate = calculateTrialEndDate();
+
+        updateUserData({
+          referredBy: 'test-user-id',
+          referredByCode: normalizedCode,
+          referralStatus: 'completed',
+          isTrialUser: true,
+          trialSource: 'referral',
+          planTrialEndDate: trialEndDate,
+        });
+
+        addToast('✅ 測試推薦碼已啟用！獲得 7 天試用期', 'success');
+        addTransaction('使用測試推薦碼', '獲得 7 天試用');
+        return { success: true, message: '成功啟用 7 天高級功能試用期！' };
+      }
+
+      // 驗證推薦碼格式（僅用於真實推薦碼）
+      if (!validateReferralCode(normalizedCode)) {
+        return { success: false, message: '推薦碼格式不正確' };
+      }
+
+      // 檢查是否已使用過推薦碼
+      if (userData.referredBy) {
+        return { success: false, message: '您已經使用過推薦碼了，每個帳號只能使用一次' };
+      }
+
+      // 檢查是否可以補登（7天內）
+      if (!canAddReferralCode(userData)) {
+        return { success: false, message: '推薦碼補登期限已過（僅限註冊後 7 天內）' };
+      }
+
+      // 驗證推薦碼是否存在（真實 Firestore 驗證）
+      const { doc: firestoreDoc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('./firebase');
+      const codeDoc = await getDoc(firestoreDoc(db, 'referralCodes', normalizedCode));
+
+      if (!codeDoc.exists()) {
+        return { success: false, message: '推薦碼不存在或已失效' };
+      }
+
+      const codeData = codeDoc.data();
+
+      // 防止自我推薦
+      if (codeData.userId === currentUser.uid) {
+        return { success: false, message: '不能使用自己的推薦碼' };
+      }
+
+      // 計算試用期結束時間（7天後）
+      const trialEndDate = calculateTrialEndDate();
+
+      // 更新用戶資料
+      updateUserData({
+        referredBy: codeData.userId,
+        referredByCode: normalizedCode,
+        referredAt: new Date().toISOString(),
+        referralStatus: 'pending',  // 完成1個任務後才會變成 completed
+        canAddReferralCode: false,
+        isTrialUser: true,
+        trialSource: 'referral',
+        planTrialEndDate: trialEndDate,
+        plan: 'premium_monthly',  // 試用期使用高級功能
+      });
+
+      addToast('🎉 推薦碼使用成功！您已獲得 7 天高級功能試用！', 'celebrate');
+      addTransaction('使用推薦碼', '獲得 7 天試用');
+
+      return { success: true, message: '推薦碼使用成功！' };
+    } catch (error) {
+      console.error('Apply referral code error:', error);
+
+      // 針對不同錯誤類型提供友善的中文訊息
+      let errorMessage = '推薦碼驗證失敗，請檢查推薦碼是否正確';
+
+      if (error instanceof Error) {
+        const errMsg = error.message.toLowerCase();
+
+        // Firebase 權限錯誤
+        if (errMsg.includes('permission') || errMsg.includes('insufficient')) {
+          errorMessage = '推薦碼不存在或已失效';
+        }
+        // 網路錯誤
+        else if (errMsg.includes('network') || errMsg.includes('timeout')) {
+          errorMessage = '網路連線錯誤，請檢查網路後重試';
+        }
+        // 其他已知錯誤直接使用
+        else if (error.message.includes('不能') || error.message.includes('已經') || error.message.includes('格式')) {
+          errorMessage = error.message;
+        }
+      }
+
+      return { success: false, message: errorMessage };
+    }
+  }, [userData, currentUser, updateUserData, addToast, addTransaction]);
+
+  /**
+   * Use a redeem code to extend premium access
+   */
+  const handleUseRedeemCode = useCallback(async (code: string, monthsToRedeem: number = 1): Promise<{ success: boolean; message: string }> => {
+    if (!userData) {
+      return { success: false, message: '用戶資料未載入' };
+    }
+
+    try {
+      const { isRedeemCodeExpired, getRedeemCodeRemainingDays } = await import('./utils/referralUtils');
+
+      // 查找兌換碼
+      const redeemCode = userData.redeemCodes?.find(rc => rc.code === code);
+
+      if (!redeemCode) {
+        return { success: false, message: '兌換碼不存在' };
+      }
+
+      if (redeemCode.used) {
+        return { success: false, message: '此兌換碼已被使用' };
+      }
+
+      if (isRedeemCodeExpired(redeemCode)) {
+        const remainingDays = getRedeemCodeRemainingDays(redeemCode);
+        return { success: false, message: `此兌換碼已過期（有效期 45 天）` };
+      }
+
+      // 驗證兌換數量
+      if (monthsToRedeem < 1 || monthsToRedeem > 2) {
+        return { success: false, message: '單次只能兌換 1-2 個月' };
+      }
+
+      // 計算新的方案結束日期
+      const currentEndDate = userData.planTrialEndDate
+        ? new Date(userData.planTrialEndDate)
+        : new Date();
+
+      const newEndDate = new Date(currentEndDate);
+      newEndDate.setMonth(newEndDate.getMonth() + monthsToRedeem);
+
+      // 更新兌換碼狀態
+      const updatedRedeemCodes = userData.redeemCodes?.map(rc =>
+        rc.code === code
+          ? { ...rc, used: true, usedAt: new Date().toISOString() }
+          : rc
+      );
+
+      // 更新用戶資料
+      updateUserData({
+        plan: 'premium_monthly',
+        planTrialEndDate: newEndDate.toISOString(),
+        redeemCodes: updatedRedeemCodes,
+        isTrialUser: false,  // 兌換後不再是試用用戶
+      });
+
+      addToast(`🎉 成功兌換 ${monthsToRedeem} 個月高級功能！`, 'celebrate');
+      addTransaction(`兌換碼: ${code}`, `+${monthsToRedeem} 個月高級功能`);
+
+      return { success: true, message: `成功兌換 ${monthsToRedeem} 個月！` };
+    } catch (error) {
+      console.error('Use redeem code error:', error);
+      return { success: false, message: '系統錯誤，請稍後再試' };
+    }
+  }, [userData, updateUserData, addToast, addTransaction]);
+
+  /**
+   * Check and handle trial/subscription expiry (called in daily reset)
+   */
+  const handleCheckTrialExpiry = useCallback(() => {
+    if (!userData) return;
+
+    const { isTrialExpired } = require('./utils/referralUtils');
+    const now = new Date();
+
+    // Check trial expiry
+    if (isTrialExpired(userData)) {
+      // 試用期已結束，禁用試用期間創建的任務
+      const tasksToDisable = userData.tasks.filter(
+        t => t.createdDuringTrial && new Date() > new Date(t.trialExpiryDate!)
+      );
+
+      if (tasksToDisable.length > 0) {
+        const updatedTasks = userData.tasks.map(task => {
+          if (task.createdDuringTrial && new Date() > new Date(task.trialExpiryDate!)) {
+            return {
+              ...task,
+              disabled: true,
+              disabledReason: '試用期已結束，升級至高級版本以繼續使用此任務'
+            };
+          }
+          return task;
+        });
+
+        updateUserData({
+          tasks: updatedTasks,
+          isTrialUser: false,  // 標記試用期已結束
+          subscriptionStatus: 'expired'
+        });
+
+        addToast(`您的試用期已結束，${tasksToDisable.length} 個任務已被禁用。升級以解鎖所有功能！`);
+      }
+    }
+
+    // Check subscription expiry (for monthly plans)
+    if (userData.subscriptionEndDate) {
+      const endDate = new Date(userData.subscriptionEndDate);
+      if (now > endDate && userData.subscriptionStatus !== 'expired') {
+        // Subscription expired
+        updateUserData({
+          subscriptionStatus: 'expired',
+          autoRenew: false  // Stop auto-renewal
+        });
+        addToast('您的訂閱已到期，請續訂以繼續使用高級功能。');
+      }
+    }
+
+    // Check for upcoming expiry (7 days, 3 days, 1 day reminders)
+    if (userData.subscriptionEndDate && userData.subscriptionStatus === 'active') {
+      const endDate = new Date(userData.subscriptionEndDate);
+      const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysLeft === 7 || daysLeft === 3 || daysLeft === 1) {
+        addToast(`提醒：您的訂閱將在 ${daysLeft} 天後到期`);
+      }
+    }
+  }, [userData, updateUserData, addToast]);
+
+  // === GEMINI API KEY MANAGEMENT (for lifetime premium users) ===
+
+  /**
+   * Set and save Gemini API key for lifetime premium users
+   */
+  const handleSetGeminiApiKey = useCallback(async (key: string): Promise<void> => {
+    if (!userData) {
+      throw new Error('用戶資料未載入');
+    }
+
+    try {
+      // Basic validation to prevent storing obviously invalid keys
+      if (!key || key.trim().length < 20) {
+        throw new Error('API Key 格式不正確（至少需要 20 個字符）');
+      }
+
+      // Update user data with the new API key
+      updateUserData({ geminiApiKey: key.trim() });
+      addToast('✅ API Key 已保存！', 'success');
+
+      // Log the operation (without logging the key itself for security)
+      addTransaction('更新 Gemini API Key', '已更新');
+    } catch (error) {
+      // Safe logging - do not expose API key in logs
+      console.error('Set Gemini API key error (safe log - key not shown)');
+      addToast('❌ 保存 API Key 時發生錯誤');
+      throw error;
+    }
+  }, [userData, updateUserData, addToast, addTransaction]);
+
+  /**
+   * Validate the current Gemini API key
+   */
+  const handleValidateGeminiApiKey = useCallback(async (): Promise<boolean> => {
+    if (!userData?.geminiApiKey) {
+      return false;
+    }
+
+    try {
+      const { validateGeminiApiKey } = await import('./services/geminiApiService');
+      return await validateGeminiApiKey(userData.geminiApiKey);
+    } catch (e) {
+      console.error('Validate Gemini API key error:', e);
+      return false;
+    }
+  }, [userData]);
+
+  const handleTriggerYesterdaySummary = async () => {
+    try {
+      // Assuming `functions` and `httpsCallable` are available in this scope
+      // If not, they would need to be imported, e.g., `import { getFunctions, httpsCallable } from 'firebase/functions';`
+      // For this change, I'll assume they are already available or will be made available.
+      // For a complete solution, you might need to add:
+      // const functions = getFunctions(); // if not already defined
+      addToast('⏳ 正在生成昨日總結，請稍後...', 'info');
+      const trigger = httpsCallable(functions, 'triggerYesterdaySummary');
+      const result = await trigger();
+      const data = result.data as { success: boolean; summary: string };
+      if (data.success) {
+        addToast('✅ 昨日總結生成成功！', 'celebrate');
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      console.error('Trigger yesterday summary error:', error);
+      addToast(`❌ 生成失敗: ${error.message || '未知錯誤'}`, 'error');
+      return false;
+    }
+  };
+
+
   const handleFeedbackSubmit = (feedback: string) => addToast('感謝您的回饋！', 'success');
 
 
@@ -785,6 +1238,14 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, ad
     handleAddKeyEvent,
     handleDeleteKeyEvent,
     handleMakeWish,
+    // Referral System Handlers
+    handleApplyReferralCode,
+    handleUseRedeemCode,
+    handleCheckTrialExpiry,
+    // Gemini API Key Management
+    handleSetGeminiApiKey,
+    handleValidateGeminiApiKey,
+    handleTriggerYesterdaySummary,
   };
 
   return (

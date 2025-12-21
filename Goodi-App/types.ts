@@ -41,6 +41,11 @@ export interface Task {
   dateRange?: { start: string; end: string };
   addedBy?: 'parent' | 'child';
   schedule?: ('mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun')[];
+  // Referral System: Trial period task tracking
+  createdDuringTrial?: boolean;  // Whether task was created during trial period
+  trialExpiryDate?: string;      // Trial expiry date (ISO string)
+  disabled?: boolean;            // Whether task is disabled (trial expired)
+  disabledReason?: string;       // Reason for disabling
 }
 
 export interface Reward {
@@ -136,6 +141,37 @@ export interface ActiveParentChildTimeSession {
   totalDurationSeconds: number;
 }
 
+// Referral System Interfaces
+export interface RedeemCode {
+  code: string;                       // Redeem code (e.g., REWARD-X3K9M2)
+  type: 'referral_reward' | 'promotion' | 'other';
+  description: string;                // Reward description
+  rewardMonths: number;               // Number of months to redeem (fixed at 1)
+  createdAt: string;                  // Creation timestamp (ISO string)
+  expiresAt: string;                  // Expiry timestamp (45 days after creation)
+  used: boolean;                      // Whether code has been used
+  usedAt?: string;                    // Usage timestamp (ISO string)
+}
+
+export interface ReferralCodeDocument {
+  code: string;                       // Referral code (e.g., GD-A3K7M9)
+  userId: string;                     // Referrer's userId
+  prefix: string;                     // Prefix (GD, FB, IG, etc.)
+  createdAt: string;                  // Creation timestamp (ISO string)
+  usedCount: number;                  // Number of times used
+  usedBy: string[];                   // List of user IDs who used this code
+  active: boolean;                    // Whether code is active
+}
+
+export interface ReferralRewardLog {
+  id: string;                         // Log ID
+  userId: string;                     // User who received the reward
+  milestone: number;                  // Milestone reached (5, 10, 15, etc.)
+  redeemCode: string;                 // Generated redeem code
+  createdAt: string;                  // Creation timestamp (ISO string)
+  claimed: boolean;                   // Whether reward has been claimed
+}
+
 export interface UserData {
   userProfile: UserProfile;
   points: number;
@@ -166,4 +202,49 @@ export interface UserData {
   childrenCount?: number;
   maxChildren?: number;
   zhuyinMode?: ZhuyinMode;
+  // Referral System Fields
+  referralCode?: string;              // User's unique referral code (e.g., GD-A3K7M9)
+  referredBy?: string;                // Referrer's userId
+  referredByCode?: string;            // Referral code used
+  referredAt?: string;                // Referral timestamp (ISO string)
+  referralStatus?: 'pending' | 'completed';  // Referral status
+  canAddReferralCode?: boolean;       // Whether user can add referral code (within 7 days)
+  referredUsers?: string[];           // List of successfully referred user IDs
+  redeemCodes?: RedeemCode[];         // List of owned redeem codes
+  isTrialUser?: boolean;              // Whether user is on trial
+  trialSource?: 'referral' | 'promotion' | 'other';  // Source of trial
+  createdAt?: string;                 // Account creation timestamp (ISO string)
+  // Pricing System Fields
+  geminiApiKey?: string;              // Gemini API Key for lifetime users
+  promoCode?: string;                 // Applied promotional code
+  discountPercentage?: number;        // Discount percentage from promo code
+  originalPrice?: number;             // Original price before discount
+  discountedPrice?: number;           // Price after discount applied
+
+  // Subscription Management Fields
+  subscriptionStatus?: 'active' | 'expired' | 'cancelled' | 'trial';  // Current subscription status
+  subscriptionStartDate?: string;     // Subscription start date (ISO string)
+  subscriptionEndDate?: string;       // Subscription end date (ISO string, null for lifetime)
+  autoRenew?: boolean;                // Whether subscription auto-renews (for monthly)
+  nextBillingDate?: string;           // Next billing date (ISO string, for monthly plans)
+  lastPaymentDate?: string;           // Last payment date (ISO string)
+  paymentMethod?: string;             // Payment method identifier
+  subscriptionCancelledAt?: string;   // When subscription was cancelled (ISO string)
 }
+
+// Usage Analytics (for product improvement, privacy-compliant)
+export interface UsageAnalytics {
+  userId: string;                      // User ID
+  date: string;                        // Date (YYYY-MM-DD)
+  plan: Plan;                          // User's plan
+  metrics: {
+    tasksCompleted: number;            // Tasks completed today
+    focusMinutes: number;              // Focus session minutes
+    aiQueriesCount: number;            // AI queries made
+    pagesVisited: string[];            // Pages visited
+    featuresUsed: string[];            // Features used
+  };
+  sessionDuration?: number;            // Session duration in minutes
+  createdAt: string;                   // Creation timestamp (ISO string)
+}
+

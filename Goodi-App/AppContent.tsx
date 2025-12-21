@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Page, ActiveParentChildTimeSession, InventoryItem, ZhuyinMode, Plan, PricingTier } from './types';
 import { useUserData } from './UserContext';
+import { getPricingTier } from './utils/planUtils';
 import Header from './components/Header';
 import TopNav from './components/TopNav';
 import HomePage from './pages/HomePage';
@@ -37,14 +38,8 @@ const AppContent: React.FC = () => {
       </div>
     );
   }
-  
-  const handleSetZhuyinMode = (mode: ZhuyinMode) => updateUserData({ zhuyinMode: mode });
 
-  const getPricingTier = (plan: Plan): PricingTier => {
-    if (plan.includes('advanced')) return 'advanced';
-    if (plan.includes('premium')) return 'premium';
-    return 'free';
-  };
+  const handleSetZhuyinMode = (mode: ZhuyinMode) => updateUserData({ zhuyinMode: mode });
 
   const pricingTier = getPricingTier(userData.plan);
   const hasAdvancedAccess = pricingTier !== 'free';
@@ -98,11 +93,13 @@ const AppContent: React.FC = () => {
 
   const handleSetCurrentPage = (page: Page) => {
     if (page === Page.ParentChildTime && !activeSession) return;
-    if (([Page.FocusTimer, Page.ParentChildTime].includes(page) && !hasAdvancedAccess) || 
-        ([Page.Tree, Page.Achievements, Page.Parent].includes(page) && !hasPremiumAccess)) {
+    if (([Page.FocusTimer, Page.ParentChildTime].includes(page) && !hasAdvancedAccess) ||
+      ([Page.Tree, Page.Achievements].includes(page) && !hasPremiumAccess) ||
+      (page === Page.Parent && !hasAdvancedAccess)) {
       addToast('升級方案以解鎖此功能！');
       return;
     }
+
     setCurrentPage(page);
   };
 
@@ -141,7 +138,7 @@ const AppContent: React.FC = () => {
         )}
         <main className="flex-grow overflow-y-auto pr-1 overflow-x-hidden rounded-xl custom-scrollbar mt-2">{renderPage()}</main>
       </div>
-      {showPinModal && <ParentPinModal onClose={() => setShowPinModal(false)} onCorrectPin={() => { setShowPinModal(false); setIsParentMode(true); setCurrentPage(Page.Parent);}} />}
+      {showPinModal && <ParentPinModal onClose={() => setShowPinModal(false)} onCorrectPin={() => { setShowPinModal(false); setIsParentMode(true); setCurrentPage(Page.Parent); }} />}
       {praiseTaskInfo && <PraiseModal taskInfo={praiseTaskInfo} onClose={() => setPraiseTaskInfo(null)} />}
     </div>
   );

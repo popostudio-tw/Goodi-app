@@ -1,0 +1,262 @@
+﻿2025-12-18T02:19:09.975141Z I generategeminicontent: 
+2025-12-18T02:19:10.168360Z E generategeminicontent: 
+2025-12-18T02:19:10.174762Z D generategeminicontent: {"message":"Callable request verification passed","verifications":{"auth":"VALID","app":"MISSING"}}
+2025-12-18T02:19:10.309812Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 49.740106722s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.5-flash"},"quotaValue":"20"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"49s"}]}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 429
+}
+
+2025-12-18T02:26:59.838281917Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"callerIp":"61.222.174.34","callerSuppliedUserAgent":"FirebaseCLI/15.0.0,gzip(gfe),gzip(gfe)","requestAttributes":{"time":"2025-12-18T02:26:59.137980673Z","auth":{}},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","authorizationInfo":[{"resource":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","permission":"cloudfunctions.functions.update","granted":true,"resourceAttributes":{"service":"cloudfunctions.googleapis.com","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","type":"cloudfunctions.googleapis.com/Function"},"permissionType":"ADMIN_WRITE"}],"resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","request":{"update_mask":{"paths":["name","build_config.runtime","build_config.entry_point","build_config.source.storage_source.bucket","build_config.source.storage_source.object","build_config.environment_variables","service_config.environment_variables","service_config.secret_environment_variables","service_config.ingress_settings","service_config.timeout_seconds","service_config.service_account_email","service_config.available_memory","service_config.min_instance_count","service_config.max_instance_count","service_config.max_instance_request_concurrency","service_config.available_cpu","service_config.vpc_connector","service_config.vpc_connector_egress_settings","labels"]},"@type":"type.googleapis.com/google.cloud.functions.v2.UpdateFunctionRequest","function":{"labels":{"deployment-callable":"true","deployment-tool":"cli-firebase","firebase-functions-hash":"f0ef8a7f4d5c384f76aac07269346fb502e4fc03"},"name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","build_config":{"runtime":"nodejs24","entry_point":"generateGeminiContent","source":{}},"service_config":{"available_memory":"256Mi","available_cpu":"1","max_instance_request_concurrency":80,"secret_environment_variables":[{"secret":"GEMINI_API_KEY","project_id":"goodi-5ec49","version":"3","key":"GEMINI_API_KEY"}]}}},"response":{"@type":"type.googleapis.com/google.longrunning.Operation"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T02:28:09.775034Z I generategeminicontent: Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started due to traffic shifting between revisions due to deployment, traffic split adjustment, or deployment health check.
+2025-12-18T02:28:12.440444Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T02:28:15.258216602Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","status":{},"authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"requestAttributes":{},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","response":{"@type":"type.googleapis.com/google.cloud.functions.v2.Function","satisfiesPzi":true,"environment":"GEN_2","updateTime":"2025-12-18T02:26:59.827338735Z","buildConfig":{"dockerRepository":"projects/goodi-5ec49/locations/us-central1/repositories/gcf-artifacts","serviceAccount":"projects/goodi-5ec49/serviceAccounts/368247732471-compute@developer.gserviceaccount.com","runtime":"nodejs24","source":{},"entryPoint":"generateGeminiContent","dockerRegistry":"ARTIFACT_REGISTRY","automaticUpdatePolicy":{}},"createTime":"2025-12-14T13:02:50.274791283Z","url":"https://us-central1-goodi-5ec49.cloudfunctions.net/generateGeminiContent","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","serviceConfig":{"uri":"https://generategeminicontent-6pozq6vq7a-uc.a.run.app","secretEnvironmentVariables":[{"version":"3","secret":"GEMINI_API_KEY","projectId":"goodi-5ec49","key":"GEMINI_API_KEY"}],"revision":"generategeminicontent-00007-bif","maxInstanceCount":20,"serviceAccountEmail":"368247732471-compute@developer.gserviceaccount.com","availableCpu":"1","maxInstanceRequestConcurrency":80,"availableMemory":"256Mi","ingressSettings":"ALLOW_ALL","allTrafficOnLatestRevision":true,"timeoutSeconds":60},"labels":{"firebase-functions-hash":"f0ef8a7f4d5c384f76aac07269346fb502e4fc03","deployment-callable":"true","deployment-tool":"cli-firebase"},"state":"ACTIVE"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T05:20:11.216604Z I generategeminicontent: 
+2025-12-18T05:20:11.248134Z I generategeminicontent: Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+2025-12-18T05:20:13.210648Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T05:20:13.484516Z E generategeminicontent: 
+2025-12-18T05:20:13.590182Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T05:20:13.720983Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T05:20:29.588559Z I generategeminicontent: 
+2025-12-18T05:20:29.770011Z E generategeminicontent: 
+2025-12-18T05:20:29.783851Z D generategeminicontent: {"verifications":{"auth":"VALID","app":"MISSING"},"message":"Callable request verification passed"}
+2025-12-18T05:20:29.825348Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T05:27:16.467534Z I generategeminicontent: 
+2025-12-18T05:27:16.654346Z E generategeminicontent: 
+2025-12-18T05:27:16.660893Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T05:27:16.706228Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T05:27:22.809036Z I generategeminicontent: 
+2025-12-18T05:27:22.986587Z E generategeminicontent: 
+2025-12-18T05:27:22.991792Z D generategeminicontent: {"verifications":{"auth":"VALID","app":"MISSING"},"message":"Callable request verification passed"}
+2025-12-18T05:27:23.056276Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T05:27:44.256256Z I generategeminicontent: 
+2025-12-18T05:27:44.436054Z E generategeminicontent: 
+2025-12-18T05:27:44.441550Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T05:27:44.483200Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T05:50:54.705169Z I generategeminicontent: 
+2025-12-18T05:50:54.722163Z I generategeminicontent: Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+2025-12-18T05:50:57.184720Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T05:50:57.484121Z E generategeminicontent: 
+2025-12-18T05:50:57.592866Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T05:50:57.739353Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T05:52:40.527295Z I generategeminicontent: 
+2025-12-18T05:52:40.714644Z E generategeminicontent: 
+2025-12-18T05:52:40.722018Z D generategeminicontent: {"verifications":{"auth":"VALID","app":"MISSING"},"message":"Callable request verification passed"}
+2025-12-18T05:52:40.920101Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:48:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T05:52:46.187514566Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"callerIp":"61.222.174.34","callerSuppliedUserAgent":"FirebaseCLI/15.0.0,gzip(gfe),gzip(gfe)","requestAttributes":{"time":"2025-12-18T05:52:45.444577630Z","auth":{}},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","authorizationInfo":[{"resource":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","permission":"cloudfunctions.functions.update","granted":true,"resourceAttributes":{"service":"cloudfunctions.googleapis.com","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","type":"cloudfunctions.googleapis.com/Function"},"permissionType":"ADMIN_WRITE"}],"resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","request":{"function":{"service_config":{"secret_environment_variables":[{"version":"3","secret":"GEMINI_API_KEY","project_id":"goodi-5ec49","key":"GEMINI_API_KEY"}],"available_memory":"256Mi","available_cpu":"1","max_instance_request_concurrency":80},"build_config":{"entry_point":"generateGeminiContent","runtime":"nodejs24","source":{}},"name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","labels":{"firebase-functions-hash":"9cb458e12280d7197793ac6a8303a832b028efb7","deployment-tool":"cli-firebase","deployment-callable":"true"}},"@type":"type.googleapis.com/google.cloud.functions.v2.UpdateFunctionRequest","update_mask":{"paths":["name","build_config.runtime","build_config.entry_point","build_config.source.storage_source.bucket","build_config.source.storage_source.object","build_config.environment_variables","service_config.environment_variables","service_config.secret_environment_variables","service_config.ingress_settings","service_config.timeout_seconds","service_config.service_account_email","service_config.available_memory","service_config.min_instance_count","service_config.max_instance_count","service_config.max_instance_request_concurrency","service_config.available_cpu","service_config.vpc_connector","service_config.vpc_connector_egress_settings","labels"]}},"response":{"@type":"type.googleapis.com/google.longrunning.Operation"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T05:53:50.382592Z I generategeminicontent: Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started due to traffic shifting between revisions due to deployment, traffic split adjustment, or deployment health check.
+2025-12-18T05:53:52.352155Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T05:53:54.186290139Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","status":{},"authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"requestAttributes":{},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","response":{"labels":{"firebase-functions-hash":"9cb458e12280d7197793ac6a8303a832b028efb7","deployment-tool":"cli-firebase","deployment-callable":"true"},"createTime":"2025-12-14T13:02:50.274791283Z","@type":"type.googleapis.com/google.cloud.functions.v2.Function","state":"ACTIVE","serviceConfig":{"maxInstanceCount":20,"ingressSettings":"ALLOW_ALL","maxInstanceRequestConcurrency":80,"revision":"generategeminicontent-00008-lon","allTrafficOnLatestRevision":true,"uri":"https://generategeminicontent-6pozq6vq7a-uc.a.run.app","availableCpu":"1","secretEnvironmentVariables":[{"secret":"GEMINI_API_KEY","key":"GEMINI_API_KEY","version":"3","projectId":"goodi-5ec49"}],"availableMemory":"256Mi","timeoutSeconds":60,"serviceAccountEmail":"368247732471-compute@developer.gserviceaccount.com"},"updateTime":"2025-12-18T05:52:46.177050673Z","environment":"GEN_2","buildConfig":{"dockerRepository":"projects/goodi-5ec49/locations/us-central1/repositories/gcf-artifacts","source":{},"automaticUpdatePolicy":{},"entryPoint":"generateGeminiContent","runtime":"nodejs24","dockerRegistry":"ARTIFACT_REGISTRY","serviceAccount":"projects/goodi-5ec49/serviceAccounts/368247732471-compute@developer.gserviceaccount.com"},"name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","satisfiesPzi":true,"url":"https://us-central1-goodi-5ec49.cloudfunctions.net/generateGeminiContent"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T05:55:50.646059Z I generategeminicontent: 
+2025-12-18T05:55:50.871932Z E generategeminicontent: 
+2025-12-18T05:55:50.985975Z D generategeminicontent: {"message":"Callable request verification passed","verifications":{"app":"MISSING","auth":"VALID"}}
+2025-12-18T05:55:53.567342Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T06:02:52.587206517Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"callerIp":"61.222.174.34","callerSuppliedUserAgent":"FirebaseCLI/15.0.0,gzip(gfe),gzip(gfe)","requestAttributes":{"time":"2025-12-18T06:02:51.939889873Z","auth":{}},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","authorizationInfo":[{"resource":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","permission":"cloudfunctions.functions.update","granted":true,"resourceAttributes":{"service":"cloudfunctions.googleapis.com","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","type":"cloudfunctions.googleapis.com/Function"},"permissionType":"ADMIN_WRITE"}],"resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","request":{"update_mask":{"paths":["name","build_config.runtime","build_config.entry_point","build_config.source.storage_source.bucket","build_config.source.storage_source.object","build_config.environment_variables","service_config.environment_variables","service_config.secret_environment_variables","service_config.ingress_settings","service_config.timeout_seconds","service_config.service_account_email","service_config.available_memory","service_config.min_instance_count","service_config.max_instance_count","service_config.max_instance_request_concurrency","service_config.available_cpu","service_config.vpc_connector","service_config.vpc_connector_egress_settings","labels"]},"@type":"type.googleapis.com/google.cloud.functions.v2.UpdateFunctionRequest","function":{"labels":{"firebase-functions-hash":"49e63ebc09e6016090d0ca302939823a1ac767cd","deployment-tool":"cli-firebase","deployment-callable":"true"},"service_config":{"max_instance_request_concurrency":80,"available_cpu":"1","secret_environment_variables":[{"version":"3","secret":"GEMINI_API_KEY","project_id":"goodi-5ec49","key":"GEMINI_API_KEY"}],"available_memory":"256Mi"},"build_config":{"entry_point":"generateGeminiContent","runtime":"nodejs24","source":{}},"name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent"}},"response":{"@type":"type.googleapis.com/google.longrunning.Operation"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T06:03:54.192746Z I generategeminicontent: Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started due to traffic shifting between revisions due to deployment, traffic split adjustment, or deployment health check.
+2025-12-18T06:03:57.611963Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T06:04:05.587415879Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","status":{},"authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"requestAttributes":{},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","response":{"createTime":"2025-12-14T13:02:50.274791283Z","serviceConfig":{"secretEnvironmentVariables":[{"version":"3","projectId":"goodi-5ec49","key":"GEMINI_API_KEY","secret":"GEMINI_API_KEY"}],"serviceAccountEmail":"368247732471-compute@developer.gserviceaccount.com","maxInstanceCount":20,"revision":"generategeminicontent-00009-tex","maxInstanceRequestConcurrency":80,"availableCpu":"1","availableMemory":"256Mi","timeoutSeconds":60,"allTrafficOnLatestRevision":true,"ingressSettings":"ALLOW_ALL","uri":"https://generategeminicontent-6pozq6vq7a-uc.a.run.app"},"environment":"GEN_2","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","labels":{"deployment-callable":"true","deployment-tool":"cli-firebase","firebase-functions-hash":"49e63ebc09e6016090d0ca302939823a1ac767cd"},"satisfiesPzi":true,"buildConfig":{"dockerRegistry":"ARTIFACT_REGISTRY","dockerRepository":"projects/goodi-5ec49/locations/us-central1/repositories/gcf-artifacts","serviceAccount":"projects/goodi-5ec49/serviceAccounts/368247732471-compute@developer.gserviceaccount.com","entryPoint":"generateGeminiContent","source":{},"automaticUpdatePolicy":{},"runtime":"nodejs24"},"@type":"type.googleapis.com/google.cloud.functions.v2.Function","url":"https://us-central1-goodi-5ec49.cloudfunctions.net/generateGeminiContent","updateTime":"2025-12-18T06:02:52.576353066Z","state":"ACTIVE"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T06:06:22.575799Z I generategeminicontent: 
+2025-12-18T06:06:22.811271Z E generategeminicontent: 
+2025-12-18T06:06:22.954314Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T06:06:26.867392Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T06:23:44.697900615Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"callerIp":"61.222.174.34","callerSuppliedUserAgent":"FirebaseCLI/15.0.0,gzip(gfe),gzip(gfe)","requestAttributes":{"time":"2025-12-18T06:23:44.020133848Z","auth":{}},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","authorizationInfo":[{"resource":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","permission":"cloudfunctions.functions.update","granted":true,"resourceAttributes":{"service":"cloudfunctions.googleapis.com","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","type":"cloudfunctions.googleapis.com/Function"},"permissionType":"ADMIN_WRITE"}],"resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","request":{"function":{"service_config":{"available_memory":"256Mi","secret_environment_variables":[{"version":"3","project_id":"goodi-5ec49","key":"GEMINI_API_KEY","secret":"GEMINI_API_KEY"}],"available_cpu":"1","max_instance_request_concurrency":80},"labels":{"deployment-tool":"cli-firebase","deployment-callable":"true","firebase-functions-hash":"86ddc989b55eb1510e05f7c30a1f6592e7048b96"},"name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","build_config":{"runtime":"nodejs24","source":{},"entry_point":"generateGeminiContent"}},"@type":"type.googleapis.com/google.cloud.functions.v2.UpdateFunctionRequest","update_mask":{"paths":["name","build_config.runtime","build_config.entry_point","build_config.source.storage_source.bucket","build_config.source.storage_source.object","build_config.environment_variables","service_config.environment_variables","service_config.secret_environment_variables","service_config.ingress_settings","service_config.timeout_seconds","service_config.service_account_email","service_config.available_memory","service_config.min_instance_count","service_config.max_instance_count","service_config.max_instance_request_concurrency","service_config.available_cpu","service_config.vpc_connector","service_config.vpc_connector_egress_settings","labels"]}},"response":{"@type":"type.googleapis.com/google.longrunning.Operation"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T06:24:43.143809Z I generategeminicontent: 
+2025-12-18T06:24:43.153216Z I generategeminicontent: Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+2025-12-18T06:24:45.607998Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T06:24:45.734360Z I generategeminicontent: Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started due to traffic shifting between revisions due to deployment, traffic split adjustment, or deployment health check.
+2025-12-18T06:24:45.923670Z E generategeminicontent: 
+2025-12-18T06:24:46.046692Z D generategeminicontent: {"message":"Callable request verification passed","verifications":{"auth":"VALID","app":"MISSING"}}
+2025-12-18T06:24:47.508508Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T06:24:48.594061Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T06:25:07.721334676Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","status":{},"authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"requestAttributes":{},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","response":{"updateTime":"2025-12-18T06:23:44.686637496Z","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","environment":"GEN_2","satisfiesPzi":true,"url":"https://us-central1-goodi-5ec49.cloudfunctions.net/generateGeminiContent","@type":"type.googleapis.com/google.cloud.functions.v2.Function","serviceConfig":{"maxInstanceRequestConcurrency":80,"availableCpu":"1","timeoutSeconds":60,"availableMemory":"256Mi","ingressSettings":"ALLOW_ALL","maxInstanceCount":20,"secretEnvironmentVariables":[{"version":"3","projectId":"goodi-5ec49","key":"GEMINI_API_KEY","secret":"GEMINI_API_KEY"}],"revision":"generategeminicontent-00010-buq","serviceAccountEmail":"368247732471-compute@developer.gserviceaccount.com","uri":"https://generategeminicontent-6pozq6vq7a-uc.a.run.app","allTrafficOnLatestRevision":true},"createTime":"2025-12-14T13:02:50.274791283Z","state":"ACTIVE","buildConfig":{"serviceAccount":"projects/goodi-5ec49/serviceAccounts/368247732471-compute@developer.gserviceaccount.com","dockerRegistry":"ARTIFACT_REGISTRY","entryPoint":"generateGeminiContent","automaticUpdatePolicy":{},"source":{},"dockerRepository":"projects/goodi-5ec49/locations/us-central1/repositories/gcf-artifacts","runtime":"nodejs24"},"labels":{"firebase-functions-hash":"86ddc989b55eb1510e05f7c30a1f6592e7048b96","deployment-tool":"cli-firebase","deployment-callable":"true"}},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T06:30:24.929150Z I generategeminicontent: 
+2025-12-18T06:30:25.150608Z E generategeminicontent: 
+2025-12-18T06:30:25.238157Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T06:30:27.835454Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T06:31:03.768943Z I generategeminicontent: 
+2025-12-18T06:31:03.965532Z E generategeminicontent: 
+2025-12-18T06:31:03.972098Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T06:31:05.253811Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T06:32:51.222821Z I generategeminicontent: 
+2025-12-18T06:32:51.415553Z E generategeminicontent: 
+2025-12-18T06:32:51.423385Z D generategeminicontent: {"verifications":{"auth":"VALID","app":"MISSING"},"message":"Callable request verification passed"}
+2025-12-18T06:32:52.742755Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T06:33:15.451850Z I generategeminicontent: 
+2025-12-18T06:33:15.634489Z E generategeminicontent: 
+2025-12-18T06:33:15.640074Z D generategeminicontent: {"message":"Callable request verification passed","verifications":{"app":"MISSING","auth":"VALID"}}
+2025-12-18T06:33:16.382364Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:11970:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11711:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13020:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T06:57:26.715820018Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"callerIp":"61.222.174.34","callerSuppliedUserAgent":"FirebaseCLI/15.0.0,gzip(gfe),gzip(gfe)","requestAttributes":{"time":"2025-12-18T06:57:26.061330034Z","auth":{}},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","authorizationInfo":[{"resource":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","permission":"cloudfunctions.functions.update","granted":true,"resourceAttributes":{"service":"cloudfunctions.googleapis.com","name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","type":"cloudfunctions.googleapis.com/Function"},"permissionType":"ADMIN_WRITE"}],"resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","request":{"@type":"type.googleapis.com/google.cloud.functions.v2.UpdateFunctionRequest","function":{"name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","service_config":{"available_cpu":"1","secret_environment_variables":[{"project_id":"goodi-5ec49","key":"GEMINI_API_KEY","secret":"GEMINI_API_KEY","version":"3"}],"available_memory":"256Mi","max_instance_request_concurrency":80},"build_config":{"source":{},"entry_point":"generateGeminiContent","runtime":"nodejs24"},"labels":{"firebase-functions-hash":"3239b8dc11c8abf12aac78ae9f81431ab464e5c4","deployment-tool":"cli-firebase","deployment-callable":"true"}},"update_mask":{"paths":["name","build_config.runtime","build_config.entry_point","build_config.source.storage_source.bucket","build_config.source.storage_source.object","build_config.environment_variables","service_config.environment_variables","service_config.secret_environment_variables","service_config.ingress_settings","service_config.timeout_seconds","service_config.service_account_email","service_config.available_memory","service_config.min_instance_count","service_config.max_instance_count","service_config.max_instance_request_concurrency","service_config.available_cpu","service_config.vpc_connector","service_config.vpc_connector_egress_settings","labels"]}},"response":{"@type":"type.googleapis.com/google.longrunning.Operation"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T06:58:14.181371Z I generategeminicontent: Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started due to traffic shifting between revisions due to deployment, traffic split adjustment, or deployment health check.
+2025-12-18T06:58:15.840739Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T06:58:17.449458115Z N generateGeminiContent: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","status":{},"authenticationInfo":{"principalEmail":"popo0622@gmail.com","principalSubject":"user:popo0622@gmail.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"requestAttributes":{},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","resourceName":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","response":{"satisfiesPzi":true,"serviceConfig":{"maxInstanceRequestConcurrency":80,"timeoutSeconds":60,"availableMemory":"256Mi","serviceAccountEmail":"368247732471-compute@developer.gserviceaccount.com","allTrafficOnLatestRevision":true,"maxInstanceCount":20,"secretEnvironmentVariables":[{"secret":"GEMINI_API_KEY","version":"3","projectId":"goodi-5ec49","key":"GEMINI_API_KEY"}],"uri":"https://generategeminicontent-6pozq6vq7a-uc.a.run.app","ingressSettings":"ALLOW_ALL","availableCpu":"1","revision":"generategeminicontent-00011-duk"},"name":"projects/goodi-5ec49/locations/us-central1/functions/generateGeminiContent","labels":{"deployment-callable":"true","deployment-tool":"cli-firebase","firebase-functions-hash":"3239b8dc11c8abf12aac78ae9f81431ab464e5c4"},"state":"ACTIVE","createTime":"2025-12-14T13:02:50.274791283Z","environment":"GEN_2","buildConfig":{"serviceAccount":"projects/goodi-5ec49/serviceAccounts/368247732471-compute@developer.gserviceaccount.com","automaticUpdatePolicy":{},"dockerRegistry":"ARTIFACT_REGISTRY","source":{},"dockerRepository":"projects/goodi-5ec49/locations/us-central1/repositories/gcf-artifacts","runtime":"nodejs24","entryPoint":"generateGeminiContent"},"@type":"type.googleapis.com/google.cloud.functions.v2.Function","updateTime":"2025-12-18T06:57:26.704173748Z","url":"https://us-central1-goodi-5ec49.cloudfunctions.net/generateGeminiContent"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2025-12-18T10:25:21.641983Z I generategeminicontent: 
+2025-12-18T10:25:21.660999Z I generategeminicontent: Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+2025-12-18T10:25:23.193971Z I generategeminicontent: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2025-12-18T10:25:23.432513Z E generategeminicontent: 
+2025-12-18T10:25:23.518296Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T10:25:25.725317Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:12044:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11764:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13094:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T10:25:39.587219Z I generategeminicontent: 
+2025-12-18T10:25:39.770235Z E generategeminicontent: 
+2025-12-18T10:25:39.775146Z D generategeminicontent: {"verifications":{"app":"MISSING","auth":"VALID"},"message":"Callable request verification passed"}
+2025-12-18T10:25:41.051328Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:12044:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11764:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13094:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
+2025-12-18T10:26:46.073946Z I generategeminicontent: 
+2025-12-18T10:26:46.265307Z E generategeminicontent: 
+2025-12-18T10:26:46.270636Z D generategeminicontent: {"verifications":{"auth":"VALID","app":"MISSING"},"message":"Callable request verification passed"}
+2025-12-18T10:26:47.586718Z ? generategeminicontent: Gemini API Error: ApiError: {"error":{"code":404,"message":"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at throwErrorIfNotOK (/workspace/node_modules/@google/genai/dist/node/index.cjs:12044:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /workspace/node_modules/@google/genai/dist/node/index.cjs:11764:13
+    at async Models.generateContent (/workspace/node_modules/@google/genai/dist/node/index.cjs:13094:24)
+    at async /workspace/lib/index.js:89:26
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:513:14 {
+  status: 404
+}
+
