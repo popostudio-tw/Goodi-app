@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { Plan, PricingTier, SubscriptionType } from '../types';
 import { getPricingTier, getSubscriptionType, getMonthlyPrice, getLifetimePrice } from '../utils/planUtils';
 import PromoCodeInput from './PromoCodeInput';
+import { startPremiumCheckout, BillingCycle } from '../services/billing';
+import { getAuth } from 'firebase/auth';
 
 interface PaymentModalProps {
     plan: Plan;
@@ -22,9 +24,17 @@ const planDetails: Record<Plan, { name: string; price: string }> = {
     premium_lifetime: { name: '高級方案 (買斷)', price: 'NT$ 1,999' },
 };
 
+// Map Plan to BillingCycle for PayPal
+const planToBillingCycle = (plan: Plan): BillingCycle => {
+    if (plan.includes('monthly')) return 'monthly';
+    if (plan.includes('lifetime')) return 'lifetime';
+    return 'monthly'; // default
+};
+
 const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }) => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [appliedPromoCode, setAppliedPromoCode] = useState('');
     const [discountedPrice, setDiscountedPrice] = useState<number | null>(null);
     const [discountPercentage, setDiscountPercentage] = useState(0);
@@ -44,15 +54,39 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
         setDiscountPercentage(percentage);
     };
 
-    const handleConfirm = () => {
+    const handleConfirm = async () => {
         setIsProcessing(true);
-        setTimeout(() => {
-            setIsProcessing(false);
-            setIsSuccess(true);
+        setError(null);
+
+        try {
+            const auth = getAuth();
+            const user = auth.currentUser;
+
+            if (!user) {
+                throw new Error('請先登入');
+            }
+
+            const billingCycle = planToBillingCycle(plan);
+            const result = await startPremiumCheckout(user.uid, billingCycle);
+
+            if (!result.success) {
+                throw new Error(result.message || '付款失敗，請稍後再試');
+            }
+
+            // PayPal will redirect, so we don't need to show success here
+            // If redirect doesn't happen, show error
             setTimeout(() => {
-                onConfirm();
-            }, 2500);
-        }, 2000);
+                if (!result.redirectUrl) {
+                    setError('無法導向付款頁面，請稍後再試');
+                    setIsProcessing(false);
+                }
+            }, 3000);
+
+        } catch (err: any) {
+            console.error('[PaymentModal] Error:', err);
+            setError(err.message || '付款過程發生錯誤');
+            setIsProcessing(false);
+        }
     };
 
     const displayPrice = discountedPrice !== null ? discountedPrice : originalPrice;
@@ -119,8 +153,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ plan, onConfirm, onCancel }
                             </div>
                         )}
 
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                                <p className="text-red-600 text-sm text-center">{error}</p>
+                            </div>
+                        )}
+
                         <p className="text-xs text-gray-500 text-center mb-4">
-                            這是一個模擬的付款流程，點擊確認後將直接為您升級方案。
+                            點擊確認後將導向 PayPal 安全付款頁面
                         </p>
                         <div className="space-y-3">
                             <button

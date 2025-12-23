@@ -1,5 +1,4 @@
 
-import "https://cdn.tailwindcss.com";
 import { Link } from "react-router-dom";
 
 const LegalPage = () => {
@@ -99,7 +98,7 @@ const LegalPage = () => {
             </li>
             <li>
               <strong>Information Collected Automatically Through Use of the
-              Services:</strong> We automatically record information when you use
+                Services:</strong> We automatically record information when you use
               our Services, including the types of Services you use, your
               settings, and your IP address, browser type, operating system,
               referring/exit pages, and date/time stamps.
@@ -120,7 +119,7 @@ const LegalPage = () => {
               For compliance purposes, including enforcing our Terms of Service,
               or other legal rights as may be required by applicable laws and
               regulations or requested by any judicial process or governmental
-      
+
               agency.
             </li>
           </ul>
@@ -146,7 +145,7 @@ const LegalPage = () => {
           <p>
             Depending on your location, you may have certain rights regarding
             your personal information, including the right to access, correct,
-or
+            or
             delete your personal information.
           </p>
           <h2 className="text-xl font-semibold border-b pb-2">

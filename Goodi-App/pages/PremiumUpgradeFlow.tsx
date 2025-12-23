@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { startPremiumCheckout, testCompleteCheckout, BillingCycle } from '../services/billing';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase';
+import { BillingCycle } from '../services/billing';
 
 // ==========================================
 // Premium 三段式升級流程
@@ -22,6 +24,7 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
         location.state?.selectedPlan || 'yearly'
     );
     const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Mock 數據：過去錯過的瞬間
     const missedMoments = [
@@ -41,11 +44,13 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
     const handleConfirm = async () => {
         if (!currentUser) {
             console.error('[PremiumUpgradeFlow] No currentUser found');
+            setError('請先登入');
             return;
         }
 
         try {
             setIsProcessing(true);
+            setError(null);
 
             // 方案 1: 如果有自定義的 onComplete 回調
             if (onComplete) {
@@ -54,27 +59,28 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                 return;
             }
 
-            // 方案 2: 啟動真實金流（未來接 PayPal/Stripe）
-            const checkoutResult = await startPremiumCheckout(currentUser.uid, selectedPlan);
+            // 方案 2: PayPal 金流整合
+            console.log('[PremiumUpgradeFlow] Starting PayPal checkout...');
+            const createOrder = httpsCallable(functions, 'createPaypalOrder');
+            const result = await createOrder();
+            const data = result.data as {
+                success: boolean;
+                orderId: string;
+                approvalUrl: string;
+                status: string;
+            };
 
-            if (checkoutResult.success) {
-                // TODO: 在生產環境，此處應該導向金流頁面
-                // 目前在開發環境，直接完成升級（測試模式）
-                if (process.env.NODE_ENV !== 'production') {
-                    console.log('[Test Mode] Completing checkout immediately...');
-                    await testCompleteCheckout(currentUser.uid, selectedPlan);
-                }
-
-                // 升級成功，導向歡迎頁或首頁
-                navigate('/premium?welcome=true');
+            if (data.success && data.approvalUrl) {
+                console.log('[PremiumUpgradeFlow] Order created:', data.orderId);
+                // 跳轉到 PayPal 結帳頁面
+                window.location.href = data.approvalUrl;
             } else {
-                console.error('[PremiumUpgradeFlow] Checkout failed:', checkoutResult.message);
-                alert('升級失敗，請稍後再試');
+                throw new Error('Failed to create PayPal order');
             }
-        } catch (error) {
-            console.error('[PremiumUpgradeFlow] Error during checkout:', error);
-            alert('升級過程發生錯誤，請稍後再試');
-        } finally {
+
+        } catch (err: any) {
+            console.error('[PremiumUpgradeFlow] Error during checkout:', err);
+            setError(err.message || '付款過程發生錯誤，請稍後再試');
             setIsProcessing(false);
         }
     };
@@ -200,8 +206,8 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                             <button
                                 onClick={() => setSelectedPlan('monthly')}
                                 className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlan === 'monthly'
-                                        ? 'border-green-500 bg-green-50'
-                                        : 'border-gray-200 hover:border-green-300'
+                                    ? 'border-green-500 bg-green-50'
+                                    : 'border-gray-200 hover:border-green-300'
                                     }`}
                             >
                                 <div className="flex items-center justify-between">
@@ -214,8 +220,8 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                                         </p>
                                     </div>
                                     <div className={`w-5 h-5 rounded-full border-2 ${selectedPlan === 'monthly'
-                                            ? 'border-green-500 bg-green-500'
-                                            : 'border-gray-300'
+                                        ? 'border-green-500 bg-green-500'
+                                        : 'border-gray-300'
                                         }`}>
                                         {selectedPlan === 'monthly' && (
                                             <div className="w-full h-full flex items-center justify-center text-white text-xs">✓</div>
@@ -228,8 +234,8 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                             <button
                                 onClick={() => setSelectedPlan('yearly')}
                                 className={`w-full p-4 rounded-xl border-2 text-left transition-all relative ${selectedPlan === 'yearly'
-                                        ? 'border-green-500 bg-green-50'
-                                        : 'border-gray-200 hover:border-green-300'
+                                    ? 'border-green-500 bg-green-50'
+                                    : 'border-gray-200 hover:border-green-300'
                                     }`}
                             >
                                 <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs font-bold py-1 px-2 rounded-full">
@@ -243,8 +249,8 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                                         </p>
                                     </div>
                                     <div className={`w-5 h-5 rounded-full border-2 ${selectedPlan === 'yearly'
-                                            ? 'border-green-500 bg-green-500'
-                                            : 'border-gray-300'
+                                        ? 'border-green-500 bg-green-500'
+                                        : 'border-gray-300'
                                         }`}>
                                         {selectedPlan === 'yearly' && (
                                             <div className="w-full h-full flex items-center justify-center text-white text-xs">✓</div>
@@ -257,8 +263,8 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                             <button
                                 onClick={() => setSelectedPlan('lifetime')}
                                 className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlan === 'lifetime'
-                                        ? 'border-green-500 bg-green-50'
-                                        : 'border-gray-200 hover:border-green-300'
+                                    ? 'border-green-500 bg-green-50'
+                                    : 'border-gray-200 hover:border-green-300'
                                     }`}
                             >
                                 <div className="flex items-center justify-between">
@@ -269,8 +275,8 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                                         </p>
                                     </div>
                                     <div className={`w-5 h-5 rounded-full border-2 ${selectedPlan === 'lifetime'
-                                            ? 'border-green-500 bg-green-500'
-                                            : 'border-gray-300'
+                                        ? 'border-green-500 bg-green-500'
+                                        : 'border-gray-300'
                                         }`}>
                                         {selectedPlan === 'lifetime' && (
                                             <div className="w-full h-full flex items-center justify-center text-white text-xs">✓</div>
@@ -280,13 +286,28 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                             </button>
                         </div>
 
+                        {/* 錯誤訊息 */}
+                        {error && (
+                            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+                                <p className="text-red-600 text-sm">❌ {error}</p>
+                            </div>
+                        )}
+
                         <button
                             onClick={handleConfirm}
                             disabled={isProcessing}
                             className={`w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg transform hover:scale-105 mb-4 ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''
                                 }`}
                         >
-                            {isProcessing ? '處理中...' : '開始記錄，不再遺憾'}
+                            {isProcessing ? (
+                                <span className="flex items-center justify-center">
+                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    跳轉到 PayPal...
+                                </span>
+                            ) : '開始記錄，不再遺憾'}
                         </button>
 
                         <p className="text-center text-xs text-gray-500 mb-4">

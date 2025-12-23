@@ -1,26 +1,10 @@
-<<<<<<< HEAD
-import React, { useState } from "react";
-import { auth, googleProvider } from "../firebase";
+import React, { useState } from 'react';
+import { auth, googleProvider } from '../firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
-} from "firebase/auth";
-
-interface LoginPageProps { }
-=======
-
-import React, { useState } from 'react';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signInWithPopup,
-  GoogleAuthProvider,
 } from 'firebase/auth';
-import { auth } from '../firebase';
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
-
-const googleProvider = new GoogleAuthProvider();
 
 const LoginPage: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -47,7 +31,7 @@ const LoginPage: React.FC = () => {
       }
     } catch (err: any) {
       console.error('[LoginPage] email auth error:', err);
-      setError(err.message.includes('auth/invalid-credential') 
+      setError(err.message.includes('auth/invalid-credential')
         ? '登入失敗：電子郵件或密碼錯誤。'
         : `發生錯誤： ${err.message}`
       );
@@ -64,13 +48,12 @@ const LoginPage: React.FC = () => {
       auth.app.options.projectId
     );
     try {
-<<<<<<< HEAD
-      console.log("[Login] Starting Google popup login...");
+      console.log('[Login] Starting Google popup login...');
       const result = await signInWithPopup(auth, googleProvider);
-      console.log("[Login] Google login SUCCESS! User:", result.user.uid);
-      console.log("[Login] Email:", result.user.email);
+      console.log('[Login] Google login SUCCESS! User:', result.user.uid);
+      console.log('[Login] Email:', result.user.email);
 
-      // 📊 追蹤登入事件
+      // 追蹤登入事件
       const { trackLogin, trackSignUp } = await import('../utils/analytics');
       const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
       if (isNewUser) {
@@ -78,33 +61,23 @@ const LoginPage: React.FC = () => {
       } else {
         trackLogin('google');
       }
-
-      // AuthContext will detect the user and App.tsx will redirect
     } catch (error: any) {
-      console.error("[Login] Google login ERROR:", error);
-      console.error("[Login] Error code:", error.code);
-      console.error("[Login] Error message:", error.message);
+      console.error('[Login] Google login ERROR:', error);
+      console.error('[Login] Error code:', error.code);
+      console.error('[Login] Error message:', error.message);
 
       let errorMessage = error.message;
       if (error.code === 'auth/popup-closed-by-user') {
-        errorMessage = "登入視窗被關閉";
+        errorMessage = '登入視窗被關閉';
       } else if (error.code === 'auth/popup-blocked') {
-        errorMessage = "瀏覽器封鎖了彈出視窗，請允許彈出視窗後再試";
+        errorMessage = '瀏覽器封鎖了彈出視窗，請允許彈出視窗後再試';
       } else if (error.code === 'auth/cancelled-popup-request') {
-        errorMessage = "登入已取消";
+        errorMessage = '登入已取消';
       }
 
-      alert(`Google 登入失敗: ${errorMessage}`);
-      setIsLoading(false);
-=======
-      const cred = await signInWithPopup(auth, googleProvider);
-      console.log('[LoginPage] Google sign in success:', cred.user);
-    } catch (err: any) {
-      console.error('[LoginPage] Google login error:', err);
-      setError(`Google 登入失敗: ${err.message}`);
+      setError(`Google 登入失敗: ${errorMessage}`);
     } finally {
       setLoading(false);
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
     }
   };
 
@@ -196,7 +169,7 @@ const LoginPage: React.FC = () => {
               disabled={loading}
               className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-xl py-3 bg-white hover:bg-slate-50 transition-colors disabled:bg-slate-100"
             >
-              <img src="https://static.wixstatic.com/shapes/ec806c_c40de356f37b4dd6a49afac9e18b3bf5.svg" alt="Google" className="w-5 h-5"/>
+              <img src="https://static.wixstatic.com/shapes/ec806c_c40de356f37b4dd6a49afac9e18b3bf5.svg" alt="Google" className="w-5 h-5" />
               <span className="text-sm font-semibold text-slate-700">
                 使用 Google 帳戶登入
               </span>

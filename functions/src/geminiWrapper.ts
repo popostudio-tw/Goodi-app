@@ -342,7 +342,7 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             } catch (error: any) {
                 console.warn(`[Retry Policy] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error.message);
 
-                // 檢查是否為永久性錯誤（404、400 等不應重試）
+                // 檢查是否為永久性錯誤（404、400、429 等不應重試）
                 const isPermanentFailure =
                     error.message?.includes('not found') ||
                     error.message?.includes('404') ||
@@ -350,8 +350,30 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                     error.status === 404 ||
                     error.status === 400;
 
+                // 檢查是否為配額耗盡錯誤（429 / RESOURCE_EXHAUSTED）
+                const isQuotaExhausted =
+                    error.status === 429 ||
+                    error.code === 429 ||
+                    error.message?.includes('429') ||
+                    error.message?.includes('RESOURCE_EXHAUSTED') ||
+                    error.message?.includes('quota') ||
+                    error.message?.includes('Quota exceeded');
+
                 if (isPermanentFailure) {
                     console.error(`[Retry Policy] Permanent failure detected (404/400). Skipping retry.`);
+                    throw error; // 立即失敗，不重試
+                }
+
+                if (isQuotaExhausted) {
+                    console.error(`[Retry Policy] Quota exhausted (429). Logging and stopping retry.`);
+                    // 記錄到 Firestore 用於監控
+                    const db = getFirestore();
+                    await db.collection('systemStatus').doc('quotaExhausted').set({
+                        lastOccurred: new Date().toISOString(),
+                        source,
+                        userId,
+                        errorMessage: error.message
+                    }, { merge: true });
                     throw error; // 立即失敗，不重試
                 }
 

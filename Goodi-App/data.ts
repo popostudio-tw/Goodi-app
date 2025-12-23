@@ -232,7 +232,7 @@ const initialAchievementsData: Achievement[] = [
 ];
 
 // ✅ 初始 userData
-const initialUserData = {
+const initialUserData: UserData = {
   userProfile: {
     nickname: '猴仔',
     age: 10,
@@ -251,36 +251,18 @@ const initialUserData = {
   sharedMessages: [],
   wishes: [],
   plan: 'free',
-  subscriptionType: undefined,
-  pricingTier: 'free',
-<<<<<<< HEAD
-  // Removed undefined values - Firestore does not accept undefined
-  // geminiApiKey, promoCode, discountPercentage, originalPrice, discountedPrice
   childrenCount: 1,
   maxChildren: 1,
-  zhuyinMode: 'auto',
-});
-=======
-  geminiApiKey: '',
-  childrenCount: 1,
-  maxChildren: 1,
-  promoCode: undefined,
-  discountPercentage: undefined,
-  originalPrice: undefined,
-  discountedPrice: undefined,
   parentPin: null,
   shopRewards: initialShopRewards,
   gachaponPrizes: initialGachaponPrizes,
   keyEvents: [],
-  focusSessionCounts: { 5: 0, 15: 0, 25: 0, 45: 0 },
+  focusSessionCounts: { 5: 0, 10: 0, 15: 0, 25: 0 },
   frozenHabitDates: [],
   referralCount: 0,
-  lastLoginDate: undefined,
   planTrialEndDate: null,
   parentIntroDismissed: false,
-  // 如果後面有加注音模式，預設給 auto
-  zhuyinMode: 'auto' as ZhuyinMode,
-} as UserData & { zhuyinMode: ZhuyinMode };
+};
 
 /**
  * 包一層函式，未來如果要根據不同 userId 給不同初始資料，可以在這裡擴充。
@@ -293,4 +275,3 @@ export const getInitialUserData = (uid: string): UserData => {
     lastLoginDate: new Date().toISOString().split('T')[0],
   };
 };
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade

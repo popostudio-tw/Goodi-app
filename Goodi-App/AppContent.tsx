@@ -2,11 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Page, ActiveParentChildTimeSession, InventoryItem } from './types';
 import { useUserData } from './UserContext';
-<<<<<<< HEAD
 import { getPricingTier } from './utils/planUtils';
-=======
 
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
 import Header from './components/Header';
 import TopNav from './components/TopNav';
 
@@ -24,7 +21,7 @@ import ParentPinModal from './components/ParentPinModal';
 import PraiseModal from './components/PraiseModal';
 
 const AppContent: React.FC = () => {
-  const { userData, updateUserData, handleUseItem } = useUserData();
+  const { userData, updateUserData, handleUseItem, addToast } = useUserData();
 
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home);
   const [isParentMode, setIsParentMode] = useState(false);
@@ -48,39 +45,27 @@ const AppContent: React.FC = () => {
     );
   }
 
-<<<<<<< HEAD
-  const handleSetZhuyinMode = (mode: ZhuyinMode) => updateUserData({ zhuyinMode: mode });
-=======
   const { userProfile, plan, zhuyinMode } = userData;
 
-  // --- 注音模式切換 --- //
+  // 注音模式切換
   const handleSetZhuyinMode = (mode: typeof zhuyinMode) => {
     updateUserData({ zhuyinMode: mode });
   };
-
-  const getPricingTier = (planValue: string): 'free' | 'advanced' | 'premium' => {
-    if (planValue.includes('advanced')) return 'advanced';
-    if (planValue.includes('premium')) return 'premium';
-    return 'free';
-  };
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
 
   const pricingTier = getPricingTier(plan);
   const hasAdvancedAccess = pricingTier !== 'free';
   const hasPremiumAccess = pricingTier === 'premium';
 
-  // --- 親子時光：啟動計時 --- //
+  // 親子時光：啟動計時
   const handleStartParentChildTime = (item: InventoryItem) => {
     if (!item.durationMinutes) return;
 
-    // 這裡照你 zip 版本邏輯：
-    // item.name 當作名稱，item.description 目前被當成 icon URL 使用
     const totalSeconds = item.durationMinutes * 60;
 
     setActiveSession({
       itemId: item.id,
       itemName: item.name,
-      itemIcon: item.description, // 你的 WalletPage 是用 description 當圖片 URL
+      itemIcon: item.description,
       totalDurationSeconds: totalSeconds,
     });
     setSessionTimeLeft(totalSeconds);
@@ -88,18 +73,7 @@ const AppContent: React.FC = () => {
     setCurrentPage(Page.ParentChildTime);
   };
 
-<<<<<<< HEAD
-  const handleSetCurrentPage = (page: Page) => {
-    if (page === Page.ParentChildTime && !activeSession) return;
-    if (([Page.FocusTimer, Page.ParentChildTime].includes(page) && !hasAdvancedAccess) ||
-      ([Page.Tree, Page.Achievements].includes(page) && !hasPremiumAccess) ||
-      (page === Page.Parent && !hasAdvancedAccess)) {
-      addToast('升級方案以解鎖此功能！');
-      return;
-    }
-
-=======
-  // --- 親子時光：包一層給 WalletPage 用 --- //
+  // 親子時光：包一層給 WalletPage 用
   const handleUseItemWithSession = (itemId: number) => {
     if (!userData) return;
 
@@ -111,7 +85,7 @@ const AppContent: React.FC = () => {
     });
   };
 
-  // --- 親子時光：倒數計時 --- //
+  // 親子時光：倒數計時
   useEffect(() => {
     if (!isSessionActive || !activeSession) return;
     if (sessionTimeLeft <= 0) {
@@ -127,11 +101,10 @@ const AppContent: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSessionActive, sessionTimeLeft, activeSession]);
 
-  // --- 親子時光：完成 --- //
+  // 親子時光：完成
   const handleSessionComplete = () => {
     if (!activeSession) return;
 
-    // 這裡沿用你 zip 版本的邏輯：結束後把 item 標記為 used
     const updatedInventory = userData.inventory.map((item) =>
       item.id === activeSession.itemId ? { ...item, used: true } : item
     );
@@ -142,13 +115,21 @@ const AppContent: React.FC = () => {
     setSessionTimeLeft(0);
   };
 
-  // --- 切換頁面時，如果在 ParentChildTime，保留 session 狀態 --- //
+  // 切換頁面（包含權限檢查）
   const handleSetCurrentPage = (page: Page) => {
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
+    if (page === Page.ParentChildTime && !activeSession) return;
+
+    if (([Page.FocusTimer, Page.ParentChildTime].includes(page) && !hasAdvancedAccess) ||
+      ([Page.Tree, Page.Achievements].includes(page) && !hasPremiumAccess) ||
+      (page === Page.Parent && !hasAdvancedAccess)) {
+      addToast('升級方案以解鎖此功能！');
+      return;
+    }
+
     setCurrentPage(page);
   };
 
-  // --- 頁面渲染 --- //
+  // 頁面渲染
   const renderPage = () => {
     if (isParentMode) {
       return (
@@ -220,10 +201,6 @@ const AppContent: React.FC = () => {
           {renderPage()}
         </main>
       </div>
-<<<<<<< HEAD
-      {showPinModal && <ParentPinModal onClose={() => setShowPinModal(false)} onCorrectPin={() => { setShowPinModal(false); setIsParentMode(true); setCurrentPage(Page.Parent); }} />}
-      {praiseTaskInfo && <PraiseModal taskInfo={praiseTaskInfo} onClose={() => setPraiseTaskInfo(null)} />}
-=======
 
       {showPinModal && (
         <ParentPinModal
@@ -231,6 +208,7 @@ const AppContent: React.FC = () => {
           onCorrectPin={() => {
             setShowPinModal(false);
             setIsParentMode(true);
+            setCurrentPage(Page.Parent);
           }}
         />
       )}
@@ -241,7 +219,6 @@ const AppContent: React.FC = () => {
           onClose={() => setPraiseTaskInfo(null)}
         />
       )}
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
     </div>
   );
 };

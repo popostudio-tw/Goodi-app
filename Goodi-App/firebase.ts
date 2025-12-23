@@ -1,6 +1,5 @@
-<<<<<<< HEAD
-
-import { initializeApp, FirebaseApp } from "firebase/app";
+// firebase.ts
+import { initializeApp, getApp, getApps, FirebaseApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -10,17 +9,8 @@ import {
 } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getFunctions, Functions } from "firebase/functions";
-import { getAnalytics, Analytics } from "firebase/analytics";
-=======
-// firebase.ts
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
-// ✅ 先不要初始化 Analytics（它會觸發 Installations / webConfig 呼叫，
-//    你目前環境變数不完整时会直接炸；先把登入跑稳再说）
-// import { getAnalytics, isSupported } from "firebase/analytics";
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
+import { getAnalytics, Analytics, isSupported } from "firebase/analytics";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string,
@@ -34,47 +24,52 @@ const firebaseConfig = {
 };
 
 // 避免 HMR / 多次初始化
-export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+export const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const auth: Auth = getAuth(app);
+export const db: Firestore = getFirestore(app);
+export const functions: Functions = getFunctions(app, "us-central1");
+export const googleProvider = new GoogleAuthProvider();
 
-<<<<<<< HEAD
 // 初始化 Analytics（僅在瀏覽器環境中）
 let analytics: Analytics | undefined;
+let crashlytics: any | undefined;
+
 if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+    }
+  });
+
+  // 初始化 Crashlytics (Note: Web SDK uses Performance Monitoring, mobile uses Crashlytics)
+  // For web, we'll use console logging and Analytics
+  // Real Crashlytics is Android/iOS only
+  crashlytics = {
+    recordError: (error: Error) => {
+      console.error('[Crashlytics Mock]', error);
+      // In production you'd send to a real error tracking service
+      if (analytics) {
+        // Log to Analytics as custom event
+        try {
+          import('firebase/analytics').then(({ logEvent }) => {
+            logEvent(analytics!, 'exception', {
+              description: error.message,
+              fatal: false
+            });
+          });
+        } catch (e) {
+          console.error('Failed to log error to Analytics:', e);
+        }
+      }
+    },
+    log: (message: string) => {
+      console.log('[Crashlytics Log]', message);
+    }
+  };
 }
 
 // ✅ 建立一個 Promise 來追蹤持久性設定的狀態
-const authInitialized = setPersistence(auth, browserLocalPersistence);
+export const authInitialized = setPersistence(auth, browserLocalPersistence);
 
-// ✅ 匯出實例和初始化 Promise
-export {
-  app,
-  auth,
-  db,
-  functions,
-  googleProvider,
-  analytics,
-  authInitialized, // 匯出這個 Promise
-};
-=======
-// 你 Functions 在 us-central1（你截图也显示 generateGrowthReport(us-central1)）
-export const functions = getFunctions(app, "us-central1");
-
-// 让 index.tsx 可以等 Auth 初始化后再 render（你现在已在用 authInitialized）
-export const authInitialized = new Promise<void>((resolve) => {
-  const unsub = auth.onAuthStateChanged(() => {
-    unsub();
-    resolve();
-  });
-});
-
-// 如果你未来真的要 analytics：等你确认 env 都正确、页面稳定后再打开
-// (async () => {
-//   if (await isSupported()) {
-//     getAnalytics(app);
-//   }
-// })();
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
+export { analytics, crashlytics };

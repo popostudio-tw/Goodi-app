@@ -1,0 +1,48 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Firebase Hosting and Functions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            Goodi-App/package-lock.json
+            functions/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: ./Goodi-App
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: ./Goodi-App
+        run: npm run build
+
+      - name: Install Functions Dependencies
+        working-directory: ./functions
+        run: npm ci
+
+      - name: Deploy to Firebase
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: goodi-5ec49
+          channelId: live
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks

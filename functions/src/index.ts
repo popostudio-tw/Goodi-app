@@ -345,10 +345,24 @@ export const manualGenerateDailyContent = onCall(
     const { data, auth } = request;
     if (!auth) throw new HttpsError("unauthenticated", "Auth required");
 
+    // 管理員權限檢查：只允許特定 email 觸發
+    const ADMIN_EMAILS = [
+      'popo.studio@msa.hinet.net',  // 主要管理員
+      // 可以在此處添加更多管理員 email
+    ];
+
+    if (!ADMIN_EMAILS.includes(auth.token.email || '')) {
+      console.warn(`[Security] Unauthorized manual trigger attempt by ${auth.token.email}`);
+      throw new HttpsError(
+        "permission-denied",
+        "此功能僅限管理員使用。如需手動觸發，請聯繫系統管理員。"
+      );
+    }
+
     const { date, force } = (data || {}) as { date: string; force?: boolean };
     const normalizedDate = date.replace(/\//g, '-');
 
-    console.log(`Manual trigger for ${normalizedDate}, force=${force}`);
+    console.log(`Manual trigger for ${normalizedDate}, force=${force}, by admin: ${auth.token.email}`);
 
     // 如果設置 force=true，先刪除既有資料強制重新生成
     if (force) {
@@ -993,3 +1007,7 @@ export const triggerYesterdaySummary = onCall(
     }
   }
 );
+
+// === PayPal Integration ===
+export { createPaypalOrder } from "./createPaypalOrder";
+export { handlePaypalWebhook } from "./handlePaypalWebhook";

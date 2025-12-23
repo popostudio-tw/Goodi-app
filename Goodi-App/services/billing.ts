@@ -1,4 +1,5 @@
 import { getFirestore, doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // ==========================================
 // 金流服務層 - 統一的付款入口
@@ -23,12 +24,12 @@ export interface MembershipData {
  * 啟動 Premium 結帳流程
  * 
  * 這是所有金流的統一入口
- * 未來接 PayPal / Stripe / 綠界都只改這裡
+ * 呼叫 PayPal Cloud Function 並導向結帳頁面
  */
 export async function startPremiumCheckout(
     userId: string,
     plan: BillingCycle
-): Promise<{ success: boolean; message?: string }> {
+): Promise<{ success: boolean; message?: string; redirectUrl?: string }> {
     try {
         const db = getFirestore();
         const checkoutIntentRef = doc(db, 'users', userId, 'checkoutIntents', Date.now().toString());
@@ -44,24 +45,32 @@ export async function startPremiumCheckout(
 
         console.log('[Billing] Checkout intent created:', { userId, plan });
 
-        // TODO: 未來在此處整合真實金流
-        // 選項 1: PayPal
-        // const paypalUrl = await createPayPalCheckout(plan, userId);
-        // window.location.href = paypalUrl;
+        // 2. 呼叫 PayPal Cloud Function 創建訂單
+        const functions = getFunctions();
+        const createPaypalOrder = httpsCallable(functions, 'createPaypalOrder');
 
-        // 選項 2: Stripe
-        // const stripeSession = await createStripeSession(plan, userId);
-        // window.location.href = stripeSession.url;
-
-        // 選項 3: 綠界 / 藍新
-        // const ecpayForm = await createECPayCheckout(plan, userId);
-        // submitECPayForm(ecpayForm);
-
-        // 目前行為：直接導向說明頁（Coming Soon）
-        return {
-            success: true,
-            message: 'checkout_intent_created'
+        const result = await createPaypalOrder({ plan });
+        const data = result.data as {
+            success: boolean;
+            orderId?: string;
+            approvalUrl?: string;
+            status?: string;
         };
+
+        if (data.success && data.approvalUrl) {
+            console.log('[Billing] PayPal order created:', data.orderId);
+
+            // 3. 導向 PayPal 結帳頁面
+            window.location.href = data.approvalUrl;
+
+            return {
+                success: true,
+                message: 'redirecting_to_paypal',
+                redirectUrl: data.approvalUrl
+            };
+        } else {
+            throw new Error('Failed to get PayPal approval URL');
+        }
 
     } catch (error) {
         console.error('[Billing] Failed to start checkout:', error);

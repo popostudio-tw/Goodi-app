@@ -4,11 +4,14 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { UserDataProvider, useUserData } from './UserContext';
 import { ToastMessage } from './types';
 import Toast from './components/Toast';
+import ErrorBoundary from './components/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
 import AppContent from './AppContent'; // Assuming your main app content is refactored into this component
 import LegalPage from './components/LegalPage';
 import PremiumUpgradePage from './pages/PremiumUpgradePage';
 import PremiumUpgradeFlow from './pages/PremiumUpgradeFlow';
+import PaymentSuccess from './pages/PaymentSuccess';
+import PaymentCancel from './pages/PaymentCancel';
 
 // --- Full Screen Spinner --- //
 const FullScreenSpinner: React.FC = () => (
@@ -74,6 +77,23 @@ const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       />
+      {/* PayPal 付款結果頁面 */}
+      <Route
+        path="/payment/success"
+        element={
+          <ProtectedRoute>
+            <PaymentSuccess />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/payment/cancel"
+        element={
+          <ProtectedRoute>
+            <PaymentCancel />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/*"
         element={
@@ -94,12 +114,14 @@ function App() {
   }, []);
 
   return (
+    <ErrorBoundary>
       <AuthProvider> {/* ✅ 1. AuthProvider wraps everything */}
         <UserDataProvider addToast={addToast}> {/* ✅ 2. UserDataProvider is inside AuthProvider */}
           <Toast toast={toast} />
           <AppRoutes /> {/* ✅ 3. Routes use the contexts */}
         </UserDataProvider>
       </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

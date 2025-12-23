@@ -64,6 +64,41 @@ node_modules/
 
 # dotenv environment variables file
 .env
+.env.local
+.env.*.local
+.env.production
+.env.development
 
 # dataconnect generated files
 .dataconnect
+
+# Build outputs
+dist/
+build/
+Goodi-App/dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+.cache/
+
+# Debug files
+all_logs.txt
+functions_log.txt
+gemini_logs.txt

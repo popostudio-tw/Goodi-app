@@ -2,14 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
-<<<<<<< HEAD
-import { authInitialized } from './firebase'; // ✅ 引入我們的初始化 Promise
+import { authInitialized } from './firebase';
 import './src/index.css';
 
 console.log('[Index] Starting app initialization...');
-=======
-import { authInitialized } from './firebase';
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -18,14 +14,15 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 
-<<<<<<< HEAD
-// ✅ 等待 Firebase 持久性設定完成後才渲染 App
+// Wait for Firebase auth persistence to be set before rendering
 authInitialized
   .then(() => {
     console.log('[Index] Firebase auth initialized, rendering App...');
     root.render(
       <React.StrictMode>
-        <App />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </React.StrictMode>
     );
     console.log('[Index] App rendered successfully!');
@@ -43,14 +40,3 @@ authInitialized
       </div>
     );
   });
-=======
-authInitialized.then(() => {
-  root.render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </React.StrictMode>
-  );
-});
->>>>>>> e24192df9de42c5aa82ba8dcf978b459e560fade
