@@ -4,6 +4,7 @@ import TestScoreModal from './TestScoreModal';
 import { getYesterdaySummary, getDailyContent } from '../src/services/apiClient';
 import ErrorDisplay from './ErrorDisplay';
 import type { ApiError } from '../src/services/apiClient';
+import fallbackContent from '../src/assets/fallbackContent.json';
 
 const WidgetCard: React.FC<{
   icon: string;
@@ -246,29 +247,41 @@ const AiYesterdaySummary: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    // Layer 1: Try API
     const result = await getYesterdaySummary();
 
-    setIsLoading(false);
-
     if (result.success && result.data) {
-      setSummary(result.data.summary || '');
-    } else if (result.error) {
-      setError(result.error);
-      setSummary('');
+      const content = result.data.summary || '';
+      setSummary(content);
+      // Save to localStorage for next time
+      if (content) localStorage.setItem('lastYesterdaySummary', content);
+      setIsLoading(false);
+      return;
     }
+
+    // Layer 2: Try localStorage
+    const cached = localStorage.getItem('lastYesterdaySummary');
+    if (cached) {
+      console.log('[Fallback] Using cached yesterday summary');
+      setSummary(cached);
+      setIsLoading(false);
+      return;
+    }
+
+    // Layer 3: Use static fallback
+    const randomIndex = Math.floor(Math.random() * fallbackContent.yesterdaySummary.length);
+    const fallback = fallbackContent.yesterdaySummary[randomIndex];
+    console.log('[Fallback] Using static yesterday summary');
+    setSummary(fallback.content);
+    setIsLoading(false);
+    // Don't show error - we have content
   };
 
   useEffect(() => {
     fetchSummary();
   }, [userData.userProfile.nickname]);
 
-  if (error) {
-    return (
-      <WidgetCard icon="https://api.iconify.design/twemoji/spiral-notepad.svg" title="昨日總結" className="bg-white/60">
-        <ErrorDisplay error={error} onRetry={fetchSummary} compact />
-      </WidgetCard>
-    );
-  }
+  // Remove error display - always show content
 
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/spiral-notepad.svg" title="昨日總結" className="bg-white/60">
@@ -289,29 +302,40 @@ const TodayInHistory: React.FC = () => {
     setError(null);
 
     const today = new Date().toISOString().split('T')[0];
+
+    // Layer 1: Try API
     const result = await getDailyContent(today);
 
-    setIsLoading(false);
-
     if (result.success && result.data) {
-      setEvent(result.data.todayInHistory || '');
-    } else if (result.error) {
-      setError(result.error);
-      setEvent('');
+      const content = result.data.todayInHistory || '';
+      setEvent(content);
+      if (content) localStorage.setItem('lastTodayInHistory', content);
+      setIsLoading(false);
+      return;
     }
+
+    // Layer 2: Try localStorage
+    const cached = localStorage.getItem('lastTodayInHistory');
+    if (cached) {
+      console.log('[Fallback] Using cached today in history');
+      setEvent(cached);
+      setIsLoading(false);
+      return;
+    }
+
+    // Layer 3: Use static fallback
+    const randomIndex = Math.floor(Math.random() * fallbackContent.todayInHistory.length);
+    const fallback = fallbackContent.todayInHistory[randomIndex];
+    console.log('[Fallback] Using static today in history');
+    setEvent(fallback.content);
+    setIsLoading(false);
   };
 
   useEffect(() => {
     fetchEvent();
   }, []);
 
-  if (error) {
-    return (
-      <WidgetCard icon="https://api.iconify.design/twemoji/spiral-calendar.svg" title="歷史的今天" color="yellow">
-        <ErrorDisplay error={error} onRetry={fetchEvent} compact />
-      </WidgetCard>
-    );
-  }
+  // Remove error display - always show content
 
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/spiral-calendar.svg" title="歷史的今天" color="yellow">
@@ -330,33 +354,44 @@ const AnimalTrivia: React.FC = () => {
     setError(null);
 
     const today = new Date().toISOString().split('T')[0];
+
+    // Layer 1: Try API
     const result = await getDailyContent(today);
 
-    setIsLoading(false);
-
     if (result.success && result.data) {
-      setFact(result.data.animalTrivia || '');
-    } else if (result.error) {
-      setError(result.error);
-      setFact('');
+      const content = result.data.animalTrivia || '';
+      setFact(content);
+      if (content) localStorage.setItem('lastAnimalTrivia', content);
+      setIsLoading(false);
+      return;
     }
+
+    // Layer 2: Try localStorage
+    const cached = localStorage.getItem('lastAnimalTrivia');
+    if (cached) {
+      console.log('[Fallback] Using cached animal trivia');
+      setFact(cached);
+      setIsLoading(false);
+      return;
+    }
+
+    // Layer 3: Use static fallback
+    const randomIndex = Math.floor(Math.random() * fallbackContent.animalTrivia.length);
+    const fallback = fallbackContent.animalTrivia[randomIndex];
+    console.log('[Fallback] Using static animal trivia');
+    setFact(fallback.content);
+    setIsLoading(false);
   };
 
   useEffect(() => {
     fetchTrivia();
   }, []);
 
-  if (error) {
-    return (
-      <WidgetCard icon="https://api.iconify.design/twemoji/paw-prints.svg" title="動物冷知識" color="green">
-        <ErrorDisplay error={error} onRetry={fetchTrivia} compact />
-      </WidgetCard>
-    );
-  }
+  // Remove error display - always show content
 
   return (
-    <WidgetCard icon="https://api.iconify.design/twemoji/paw-prints.svg" title="動物冷知識" color="green">
-      {isLoading ? <p>載入中...</p> : <p>{fact}</p>}
+    <WidgetCard icon="https://api.iconify.design/twemoji/dog-face.svg" title="動物小知識" color="blue">
+      {isLoading ? <p>尋找有趣的動物故事...</p> : <p>{fact}</p>}
     </WidgetCard>
   );
 };
