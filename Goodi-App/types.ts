@@ -10,7 +10,7 @@ export enum Page {
   ParentChildTime = 'ParentChildTime',
 }
 
-export type ParentView = 'dashboard' | 'tasks' | 'gachapon' | 'rewards';
+export type ParentView = 'dashboard' | 'tasks' | 'gachapon' | 'rewards' | 'settings';
 
 // Plan types: supporting both old (paid199, paid499) and new naming conventions
 export type Plan =

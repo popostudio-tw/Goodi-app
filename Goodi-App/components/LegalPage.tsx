@@ -49,15 +49,55 @@ const LegalPage = () => {
               用於法律原因：如果我們真誠地相信存取、使用、保存或揭露資訊是合理必要的，以滿足任何適用法律、法規、法律程序或可執行的政府要求。
             </li>
           </ul>
-          <h2 className="text-xl font-semibold border-b pb-2">4. 您的權利</h2>
+          <h2 className="text-xl font-semibold border-b pb-2">4. 第三方服務</h2>
+          <p>我們使用以下第三方服務來提供我們的功能：</p>
+          <ul className="list-disc list-inside space-y-2 pl-4">
+            <li>
+              <strong>Firebase (Google Cloud Platform)：</strong>{" "}
+              我們使用Firebase來提供後端服務，包括用戶認證、資料存儲（Firestore）、雲端函數（Cloud Functions）和分析（Analytics）。您的資料將根據Google的隱私政策處理。
+            </li>
+            <li>
+              <strong>Google Gemini AI：</strong>{" "}
+              我們使用Google Gemini AI來提供智能內容生成、成長報告和AI助手功能。您的對話數據將用於生成個性化建議，但不會用於訓練Google的AI模型。
+            </li>
+          </ul>
+          <h2 className="text-xl font-semibold border-b pb-2 mt-6">5. 您的權利</h2>
           <p>
-            根據您所在的位置，您可能擁有某些關於您個人資訊的權利，包括存取、更正或刪除您的個人資訊的權利。
+            根據您所在的位置，您可能擁有某些關於您個人資訊的權利，包括：
           </p>
-          <h2 className="text-xl font-semibold border-b pb-2">5. 兒童隱私</h2>
+          <ul className="list-disc list-inside space-y-2 pl-4">
+            <li><strong>存取權：</strong> 您可以要求查看我們持有的您的個人資料。</li>
+            <li><strong>更正權：</strong> 您可以要求更正不準確的個人資料。</li>
+            <li><strong>刪除權：</strong> 您可以隨時要求刪除您的帳號和所有相關資料。</li>
+          </ul>
+          <h3 className="text-lg font-semibold mt-4 mb-2">⭐ 帳號刪除</h3>
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <p className="mb-2">您可以隨時刪除您的帳號。刪除帳號的步驟如下：</p>
+            <ol className="list-decimal list-inside space-y-2 pl-4 mb-3">
+              <li>登入應用程式</li>
+              <li>進入「家長模式」</li>
+              <li>前往「設定」頁面</li>
+              <li>點擊「帳號管理」中的「刪除帳號」按鈕</li>
+              <li>確認您要刪除帳號</li>
+            </ol>
+            <p className="font-semibold text-red-600 mb-2">⚠️ 刪除帳號後，以下資料將永久移除且無法恢復：</p>
+            <ul className="list-disc list-inside space-y-1 pl-4">
+              <li>所有任務紀錄</li>
+              <li>成績歷史</li>
+              <li>AI成長報告</li>
+              <li>心事樹洞對話</li>
+              <li>每日亮點</li>
+              <li>訂閱方案（如有）</li>
+            </ul>
+            <p className="mt-3 text-sm text-gray-600">
+              帳號刪除將立即執行。基於合規要求，我們會保留刪除記錄（僅包含用戶ID和刪除時間）30天。
+            </p>
+          </div>
+          <h2 className="text-xl font-semibold border-b pb-2 mt-6">6. 兒童隱私</h2>
           <p>
             我們的服務主要設計給家長和監護人管理，我們鼓勵家長積極參與和監督孩子的線上活動。我們不會故意從兒童那裡收集個人可識別資訊。如果我們發現我們在未經父母同意的情況下收集了兒童的個人資料，我們將採取措施從我們的伺服器上刪除該資訊。
           </p>
-          <h2 className="text-xl font-semibold border-b pb-2">6. 聯繫我們</h2>
+          <h2 className="text-xl font-semibold border-b pb-2">7. 聯繫我們</h2>
           <p>
             如果您對本隱私權政策有任何疑問，請透過電子郵件聯繫我們：
             <a
@@ -140,15 +180,55 @@ const LegalPage = () => {
             </li>
           </ul>
           <h2 className="text-xl font-semibold border-b pb-2">
-            4. Your Rights
+            4. Third-Party Services
+          </h2>
+          <p>We use the following third-party services to provide our functionality:</p>
+          <ul className="list-disc list-inside space-y-2 pl-4">
+            <li>
+              <strong>Firebase (Google Cloud Platform):</strong>{" "}
+              We use Firebase to provide backend services, including user authentication, data storage (Firestore), cloud functions, and analytics. Your data will be processed according to Google's Privacy Policy.
+            </li>
+            <li>
+              <strong>Google Gemini AI:</strong>{" "}
+              We use Google Gemini AI to provide intelligent content generation, growth reports, and AI assistant features. Your conversation data is used to generate personalized recommendations but is not used to train Google's AI models.
+            </li>
+          </ul>
+          <h2 className="text-xl font-semibold border-b pb-2 mt-6">
+            5. Your Rights
           </h2>
           <p>
             Depending on your location, you may have certain rights regarding
-            your personal information, including the right to access, correct,
-            or
-            delete your personal information.
+            your personal information, including:
           </p>
-          <h2 className="text-xl font-semibold border-b pb-2">
+          <ul className="list-disc list-inside space-y-2 pl-4">
+            <li><strong>Right to Access:</strong> You may request to view the personal data we hold about you.</li>
+            <li><strong>Right to Correction:</strong> You may request correction of inaccurate personal data.</li>
+            <li><strong>Right to Deletion:</strong> You may request deletion of your account and all related data at any time.</li>
+          </ul>
+          <h3 className="text-lg font-semibold mt-4 mb-2">⭐ Account Deletion</h3>
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <p className="mb-2">You can delete your account at any time. To delete your account:</p>
+            <ol className="list-decimal list-inside space-y-2 pl-4 mb-3">
+              <li>Log into the application</li>
+              <li>Enter "Parent Mode"</li>
+              <li>Go to the "Settings" page</li>
+              <li>Click "Delete Account" in the "Account Management" section</li>
+              <li>Confirm that you want to delete your account</li>
+            </ol>
+            <p className="font-semibold text-red-600 mb-2">⚠️ After deleting your account, the following data will be permanently removed and cannot be recovered:</p>
+            <ul className="list-disc list-inside space-y-1 pl-4">
+              <li>All task records</li>
+              <li>Grade history</li>
+              <li>AI growth reports</li>
+              <li>Whisper tree conversations</li>
+              <li>Daily highlights</li>
+              <li>Subscription plan (if any)</li>
+            </ul>
+            <p className="mt-3 text-sm text-gray-600">
+              Account deletion is executed immediately. For compliance purposes, we retain deletion logs (containing only user ID and deletion timestamp) for 30 days.
+            </p>
+          </div>
+          <h2 className="text-xl font-semibold border-b pb-2 mt-6">
             5. Children's Privacy
           </h2>
           <p>

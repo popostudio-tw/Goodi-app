@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase';
 import { BillingCycle } from '../services/billing';
 
 // ==========================================
@@ -42,47 +40,21 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
     };
 
     const handleConfirm = async () => {
-        if (!currentUser) {
-            console.error('[PremiumUpgradeFlow] No currentUser found');
-            setError('請先登入');
-            return;
+        // 導向 App Store 或 Google Play 訂閱
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/.test(navigator.userAgent);
+
+        let message = '請前往應用程式商店訂閱高級方案：\n\n';
+        if (isIOS) {
+            message += '• iOS 用戶：請前往 App Store 進行訂閱';
+        } else if (isAndroid) {
+            message += '• Android 用戶：請前往 Google Play 進行訂閱';
+        } else {
+            message += '• 請在您的手機 App 中進行訂閱\n• iOS：前往 App Store\n• Android：前往 Google Play';
         }
 
-        try {
-            setIsProcessing(true);
-            setError(null);
-
-            // 方案 1: 如果有自定義的 onComplete 回調
-            if (onComplete) {
-                await onComplete(selectedPlan);
-                navigate('/');
-                return;
-            }
-
-            // 方案 2: PayPal 金流整合
-            console.log('[PremiumUpgradeFlow] Starting PayPal checkout...');
-            const createOrder = httpsCallable(functions, 'createPaypalOrder');
-            const result = await createOrder();
-            const data = result.data as {
-                success: boolean;
-                orderId: string;
-                approvalUrl: string;
-                status: string;
-            };
-
-            if (data.success && data.approvalUrl) {
-                console.log('[PremiumUpgradeFlow] Order created:', data.orderId);
-                // 跳轉到 PayPal 結帳頁面
-                window.location.href = data.approvalUrl;
-            } else {
-                throw new Error('Failed to create PayPal order');
-            }
-
-        } catch (err: any) {
-            console.error('[PremiumUpgradeFlow] Error during checkout:', err);
-            setError(err.message || '付款過程發生錯誤，請稍後再試');
-            setIsProcessing(false);
-        }
+        alert(message);
+        navigate('/');
     };
 
     return (
@@ -305,13 +277,13 @@ const PremiumUpgradeFlow: React.FC<PremiumUpgradeFlowProps> = ({ onComplete }) =
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    跳轉到 PayPal...
+                                    處理中...
                                 </span>
                             ) : '開始記錄，不再遺憾'}
                         </button>
 
                         <p className="text-center text-xs text-gray-500 mb-4">
-                            隨時可取消 | 7 天無條件退款
+                            付款功能開發中，敬請期待
                             <br />
                             我們理解，育兒本來就很難。
                         </p>

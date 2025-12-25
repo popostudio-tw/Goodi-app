@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { useUserData } from '../UserContext';
 import TestScoreModal from './TestScoreModal';
+import { getYesterdaySummary, getDailyContent } from '../src/services/apiClient';
+import ErrorDisplay from './ErrorDisplay';
+import type { ApiError } from '../src/services/apiClient';
 
 const WidgetCard: React.FC<{
   icon: string;
@@ -237,46 +239,36 @@ const DailyStats: React.FC = () => {
 const AiYesterdaySummary: React.FC = () => {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
   const { userData } = useUserData();
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string }), []);
+
+  const fetchSummary = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const result = await getYesterdaySummary();
+
+    setIsLoading(false);
+
+    if (result.success && result.data) {
+      setSummary(result.data.summary || '');
+    } else if (result.error) {
+      setError(result.error);
+      setSummary('');
+    }
+  };
 
   useEffect(() => {
-    const fetchSummary = async () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      const cacheKey = `goodi_summary_${yesterdayStr}`;
-      const cachedData = localStorage.getItem(cacheKey);
-
-      if (cachedData) {
-        setSummary(cachedData);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const yesterdayTasks = userData.transactions
-          .filter(t => new Date(t.timestamp).toISOString().split('T')[0] === yesterdayStr && t.description.startsWith('完成任務'))
-          .map(t => t.description)
-          .join(', ');
-
-        const prompt = `你是AI夥伴Goodi。根據${userData.userProfile.nickname}孩子昨日的活動，寫一段溫馨的總結與鼓勵（繁體中文，80-120字）。昨日完成任務：${yesterdayTasks || '沒有記錄到喔'}`;
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-        });
-        const newSummary = response.text.trim();
-        setSummary(newSummary);
-        localStorage.setItem(cacheKey, newSummary);
-      } catch (error) {
-        setSummary("昨天也是很棒的一天！繼續加油喔！");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchSummary();
-  }, [ai, userData.transactions, userData.userProfile.nickname]);
+  }, [userData.userProfile.nickname]);
+
+  if (error) {
+    return (
+      <WidgetCard icon="https://api.iconify.design/twemoji/spiral-notepad.svg" title="昨日總結" className="bg-white/60">
+        <ErrorDisplay error={error} onRetry={fetchSummary} compact />
+      </WidgetCard>
+    );
+  }
 
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/spiral-notepad.svg" title="昨日總結" className="bg-white/60">
@@ -286,44 +278,40 @@ const AiYesterdaySummary: React.FC = () => {
 };
 
 
+
 const TodayInHistory: React.FC = () => {
   const [event, setEvent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string }), []);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchEvent = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const today = new Date().toISOString().split('T')[0];
+    const result = await getDailyContent(today);
+
+    setIsLoading(false);
+
+    if (result.success && result.data) {
+      setEvent(result.data.todayInHistory || '');
+    } else if (result.error) {
+      setError(result.error);
+      setEvent('');
+    }
+  };
 
   useEffect(() => {
-    const fetchEvent = async () => {
-      const today = new Date();
-      const todayKey = today.toISOString().split('T')[0];
-      const cacheKey = `history_real_${todayKey}`;
-      const cachedData = localStorage.getItem(cacheKey);
-
-      if (cachedData) { setEvent(cachedData); setIsLoading(false); return; }
-
-      try {
-        // Use Google Search Grounding to get REAL facts
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: `What happened on this day (${today.getMonth() + 1}月${today.getDate()}日) in history? Find a positive, interesting event suitable for a 6-10 year old child. Respond in Traditional Chinese (繁體中文). Limit to 100 words. Ensure it is factually correct based on search results.`,
-          config: {
-            tools: [{ googleSearch: {} }]
-          }
-        });
-
-        // Grounding chunks contain the source, response.text contains the summarized answer
-        const newEvent = response.text.trim();
-        setEvent(newEvent);
-        localStorage.setItem(cacheKey, newEvent);
-      } catch (error) {
-        console.error("History Error", error);
-        setEvent("歷史上的今天發生了好多有趣的事，可以去圖書館查查看喔！");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchEvent();
-  }, [ai]);
+  }, []);
+
+  if (error) {
+    return (
+      <WidgetCard icon="https://api.iconify.design/twemoji/spiral-calendar.svg" title="歷史的今天" color="yellow">
+        <ErrorDisplay error={error} onRetry={fetchEvent} compact />
+      </WidgetCard>
+    );
+  }
 
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/spiral-calendar.svg" title="歷史的今天" color="yellow">
@@ -335,32 +323,36 @@ const TodayInHistory: React.FC = () => {
 const AnimalTrivia: React.FC = () => {
   const [fact, setFact] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string }), []);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchTrivia = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const today = new Date().toISOString().split('T')[0];
+    const result = await getDailyContent(today);
+
+    setIsLoading(false);
+
+    if (result.success && result.data) {
+      setFact(result.data.animalTrivia || '');
+    } else if (result.error) {
+      setError(result.error);
+      setFact('');
+    }
+  };
 
   useEffect(() => {
-    const fetchTrivia = async () => {
-      const today = new Date();
-      const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-      const cacheKey = `trivia_${seed}`;
-      const cachedData = localStorage.getItem(cacheKey);
-
-      if (cachedData) { setFact(cachedData); setIsLoading(false); return; }
-
-      try {
-        const prompt = "用繁體中文給我一個關於動物的、適合兒童的、有趣且富含知識的冷知識。請確保內容豐富，長度至少 50 字，但不超過 100 字。";
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { seed } });
-        const newFact = response.text.trim();
-        setFact(newFact);
-        localStorage.setItem(cacheKey, newFact);
-      } catch (error) {
-        setFact("你知道嗎？海豚睡覺時只閉一隻眼睛喔！");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchTrivia();
-  }, [ai]);
+  }, []);
+
+  if (error) {
+    return (
+      <WidgetCard icon="https://api.iconify.design/twemoji/paw-prints.svg" title="動物冷知識" color="green">
+        <ErrorDisplay error={error} onRetry={fetchTrivia} compact />
+      </WidgetCard>
+    );
+  }
 
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/paw-prints.svg" title="動物冷知識" color="green">

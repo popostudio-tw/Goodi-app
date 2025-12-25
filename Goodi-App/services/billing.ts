@@ -1,8 +1,7 @@
 import { getFirestore, doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // ==========================================
-// 金流服務層 - 統一的付款入口
+// 金流服務層 - 會員管理
 // ==========================================
 
 export type BillingCycle = 'monthly' | 'yearly' | 'lifetime';
@@ -18,67 +17,6 @@ export interface MembershipData {
         createdAt: string;
         status: 'pending' | 'completed' | 'failed';
     }>;
-}
-
-/**
- * 啟動 Premium 結帳流程
- * 
- * 這是所有金流的統一入口
- * 呼叫 PayPal Cloud Function 並導向結帳頁面
- */
-export async function startPremiumCheckout(
-    userId: string,
-    plan: BillingCycle
-): Promise<{ success: boolean; message?: string; redirectUrl?: string }> {
-    try {
-        const db = getFirestore();
-        const checkoutIntentRef = doc(db, 'users', userId, 'checkoutIntents', Date.now().toString());
-
-        // 1. 記錄結帳意圖到 Firestore（用於追蹤轉化）
-        await setDoc(checkoutIntentRef, {
-            plan,
-            createdAt: new Date().toISOString(),
-            status: 'pending',
-            amount: getPlanAmount(plan),
-            currency: 'TWD'
-        });
-
-        console.log('[Billing] Checkout intent created:', { userId, plan });
-
-        // 2. 呼叫 PayPal Cloud Function 創建訂單
-        const functions = getFunctions();
-        const createPaypalOrder = httpsCallable(functions, 'createPaypalOrder');
-
-        const result = await createPaypalOrder({ plan });
-        const data = result.data as {
-            success: boolean;
-            orderId?: string;
-            approvalUrl?: string;
-            status?: string;
-        };
-
-        if (data.success && data.approvalUrl) {
-            console.log('[Billing] PayPal order created:', data.orderId);
-
-            // 3. 導向 PayPal 結帳頁面
-            window.location.href = data.approvalUrl;
-
-            return {
-                success: true,
-                message: 'redirecting_to_paypal',
-                redirectUrl: data.approvalUrl
-            };
-        } else {
-            throw new Error('Failed to get PayPal approval URL');
-        }
-
-    } catch (error) {
-        console.error('[Billing] Failed to start checkout:', error);
-        return {
-            success: false,
-            message: error instanceof Error ? error.message : 'Unknown error'
-        };
-    }
 }
 
 /**
@@ -158,15 +96,6 @@ export async function isPremiumUser(userId: string): Promise<boolean> {
 // ==========================================
 // Helper Functions
 // ==========================================
-
-function getPlanAmount(plan: BillingCycle): number {
-    const pricing = {
-        monthly: 599,
-        yearly: 5990,
-        lifetime: 19999
-    };
-    return pricing[plan];
-}
 
 function getDurationInMs(billingCycle: BillingCycle): number {
     const durations = {

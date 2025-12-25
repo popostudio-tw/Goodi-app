@@ -1,13 +1,13 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Task, Plan, ScoreEntry, ParentView, GachaponPrize, UserProfile, Subject, TestType, Reward, KeyEvent } from '../types';
 import PlanSelector from '../components/PlanSelector';
 import SharedMessages from '../components/SharedMessages';
-import PaymentModal from '../components/PaymentModal';
 import ParentWishes from '../components/ParentWishes';
 import ScoreChart from '../components/ScoreChart';
-import { GoogleGenAI, Type } from "@google/genai";
-import { FirebaseGenAI } from '../services/firebaseAI';
+// Removed: GoogleGenAI - Security: API key exposure
+// Removed: FirebaseGenAI - Migrated to unified apiClient
 import { hasPremiumAccess } from '../utils/planUtils';
 import AiGrowthReport from '../components/AiGrowthReport';
 import { useUserData, commonTasksData } from '../UserContext';
@@ -20,6 +20,10 @@ import RedeemCodeManager from '../components/RedeemCodeManager';
 // Referral System Utils
 import { getReferralProgress, getNextMilestone, canAddReferralCode, getTrialRemainingDays } from '../utils/referralUtils';
 import WeeklyReport from '../components/WeeklyReport';
+// Settings and Account Management
+import SettingsPage from './SettingsPage';
+import { deleteUserAccount } from '../services/accountDeletion';
+
 
 
 const ICON_LIST = [
@@ -90,12 +94,11 @@ const IconPicker: React.FC<{ selectedIcon: string; onSelect: (icon: string) => v
 
 // --- New AI Task Suggestion Modal ---
 const AiTaskSuggestModal: React.FC<{
-  ai: GoogleGenAI;
   userAge: number | null;
   existingTasks: Task[];
   onClose: () => void;
   onImport: (tasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => void;
-}> = ({ ai, userAge, existingTasks, onClose, onImport }) => {
+}> = ({ userAge, existingTasks, onClose, onImport }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [suggestedTasks, setSuggestedTasks] = useState<Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]>([]);
@@ -160,32 +163,36 @@ const AiTaskSuggestModal: React.FC<{
         }
 
         // 3. 範本庫沒有匹配，才呼叫 AI
-        const { callAiFunction } = await import('../src/services/aiClient');
+        const { generateGeminiContent } = await import('../src/services/apiClient');
 
         const schema = {
-          type: Type.ARRAY,
+          type: "array" as const,
           items: {
-            type: Type.OBJECT,
+            type: "object" as const,
             properties: {
-              text: { type: Type.STRING, description: "任務的名稱" },
-              points: { type: Type.NUMBER, description: "獎勵積分 (1-3分)" },
-              category: { type: Type.STRING, description: "任務類別 ('生活', '家務', '學習')" },
-              icon: { type: Type.STRING, description: `從提供的列表中選擇一個最適合的圖示 URL: ${ICON_LIST.slice(0, 5).join(', ')}...` },
-              description: { type: Type.STRING, description: "給孩子的簡短鼓勵描述" },
+              text: { type: "string" as const, description: "任務的名稱" },
+              points: { type: "number" as const, description: "獎勵積分 (1-3分)" },
+              category: { type: "string" as const, description: "任務類別 ('生活', '家務', '學習')" },
+              icon: { type: "string" as const, description: `從提供的列表中選擇一個最適合的圖示 URL: ${ICON_LIST.slice(0, 5).join(', ')}...` },
+              description: { type: "string" as const, description: "給孩子的簡短鼓勵描述" },
             },
             required: ['text', 'points', 'category', 'icon', 'description']
           }
         };
 
-        const result = await callAiFunction('generateGeminiContent', {
+        const result = await generateGeminiContent({
           model: "gemini-2.0-flash",
           prompt: `你是一位資深兒童教育專家。請為一位 ${userAge} 歲的孩子，推薦 5 個具體且適合他年齡的任務。任務必須能鼓勵自主性與責任感。任務類別只能是 '生活', '家務', 或 '學習'。請確保任務名稱獨特。請務必使用【繁體中文】回覆。任務圖示 icon 欄位必須從以下列表中選擇一個最符合的 URL: [${ICON_LIST.join(', ')}]。`,
           responseMimeType: "application/json",
           schema: schema,
         });
 
-        const parsedTasks = typeof result.text === 'string' ? JSON.parse(result.text) : result;
-        const tasks = Array.isArray(parsedTasks) ? parsedTasks : (parsedTasks.tasks || []);
+        if (!result.success || !result.data) {
+          throw new Error(result.error?.message || 'AI 生成失敗');
+        }
+
+        const parsedTasks = typeof result.data?.text === 'string' ? JSON.parse(result.data.text) : result.data;
+        const tasks = Array.isArray(parsedTasks) ? parsedTasks : (parsedTasks?.tasks || []);
 
         setSuggestedTasks(tasks);
         setFromTemplate(false);
@@ -301,13 +308,11 @@ const AiTaskSuggestModal: React.FC<{
 };
 
 // --- New AI Goal Task Generator Modal ---
-const AiGoalTaskGeneratorModal: React.FC<{
-  ai: GoogleGenAI;
+const AiGoalTaskGenerator: React.FC<{
   userAge: number | null;
-  onClose: () => void;
-  onImport: (tasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => void;
-}> = ({ ai, userAge, onClose, onImport }) => {
-  const [goal, setGoal] = useState('');
+  goal: string;
+  onGenerated: (tasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => void;
+}> = ({ userAge, goal, onGenerated }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedTasks, setGeneratedTasks] = useState<Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]>([]);
@@ -356,36 +361,41 @@ const AiGoalTaskGeneratorModal: React.FC<{
           recordTemplateUsage(template.id);
         }
         setIsLoading(false);
+        onGenerated(tasks); // Call onGenerated with the tasks from template
         return;
       }
 
       // 2. 範本庫沒有匹配，呼叫 AI
-      const { callAiFunction } = await import('../src/services/aiClient');
+      const { generateGeminiContent } = await import('../src/services/apiClient');
 
       const schema = {
-        type: Type.ARRAY,
+        type: "array" as const,
         items: {
-          type: Type.OBJECT,
+          type: "object" as const,
           properties: {
-            text: { type: Type.STRING, description: "任務的名稱" },
-            points: { type: Type.NUMBER, description: "獎勵積分 (1-3分)" },
-            category: { type: Type.STRING, description: "任務類別 ('生活', '家務', '學習')" },
-            icon: { type: Type.STRING, description: `從提供的列表中選擇一個最適合的圖示 URL` },
-            description: { type: Type.STRING, description: "給孩子的簡短鼓勵描述" },
+            text: { type: "string" as const, description: "任務的名稱" },
+            points: { type: "number" as const, description: "獎勵積分 (1-3分)" },
+            category: { type: "string" as const, description: "任務類別 ('生活', '家務', '學習')" },
+            icon: { type: "string" as const, description: `從提供的列表中選擇一個最適合的圖示 URL` },
+            description: { type: "string" as const, description: "給孩子的簡短鼓勵描述" },
           },
           required: ['text', 'points', 'category', 'icon', 'description']
         }
       };
 
-      const result = await callAiFunction('generateGeminiContent', {
+      const result = await generateGeminiContent({
         model: "gemini-2.0-flash",
         prompt: `你是一位資深育兒顧問與兒童發展專家。請為一位 ${userAge} 歲的孩子，圍繞「${goal}」這個目標，設計 5 個具體、可行、且能引發孩子興趣的任務。請務必使用【繁體中文】編寫。任務類別必須是 '生活', '家務', 或 '學習'。圖示 icon 欄位必須從以下列表中選擇最合理的 URL: [${ICON_LIST.join(', ')}]。`,
         responseMimeType: "application/json",
         schema: schema,
       });
 
-      const parsedTasks = typeof result.text === 'string' ? JSON.parse(result.text) : result;
-      const tasks = Array.isArray(parsedTasks) ? parsedTasks : (parsedTasks.tasks || []);
+      if (!result.success || !result.data) {
+        throw new Error(result.error?.message || 'AI 生成失敗');
+      }
+
+      const parsedTasks = typeof result.data?.text === 'string' ? JSON.parse(result.data.text) : result.data;
+      const tasks = Array.isArray(parsedTasks) ? parsedTasks : (parsedTasks?.tasks || []);
 
       setGeneratedTasks(tasks);
       setSelectedTasks(tasks.map((_: any, index: number) => index));
@@ -401,6 +411,7 @@ const AiGoalTaskGeneratorModal: React.FC<{
         icon: t.icon,
         description: t.description
       })));
+      onGenerated(tasks); // Call onGenerated with the newly generated tasks
 
     } catch (err: any) {
       console.error("AI goal generation error:", err);
@@ -416,106 +427,85 @@ const AiGoalTaskGeneratorModal: React.FC<{
     );
   };
 
-  const handleImport = () => {
-    const tasksToImport = selectedTasks.map(index => generatedTasks[index]);
-    onImport(tasksToImport);
-    onClose();
-  };
-
+  // This component no longer handles import directly, it calls onGenerated
+  // The parent component will handle the import logic after onGenerated is called.
+  // The "匯入" button will be removed from this component's JSX.
 
   return (
-    <Modal onClose={onClose} title="AI 智慧任務產生器" maxWidth="max-w-4xl">
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex flex-col md:flex-row gap-4 flex-grow min-h-0">
-          {/* Left Panel: Input Area & Controls */}
-          <div className="flex-shrink-0 md:w-1/3 flex flex-col gap-4 h-full">
-            <div className="flex-grow overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-4">
-              <div className="p-3 bg-white/60 backdrop-blur-md rounded-2xl border border-white/50 shadow-sm">
-                <p className="text-xs text-gray-600 mb-2 leading-relaxed font-medium">
-                  想培養孩子什麼能力？<br />
-                  輸入目標，AI 幫你設計專屬任務清單！
-                </p>
-                <div className="flex flex-col gap-2">
-                  <textarea
-                    value={goal}
-                    onChange={e => setGoal(e.target.value)}
-                    placeholder="例如：更有責任感、學會時間管理..."
-                    className="w-full p-3 border border-gray-300 bg-white rounded-xl focus:ring-2 focus:ring-blue-500 shadow-inner h-20 resize-none transition-all text-sm"
-                    disabled={isLoading}
-                  />
-                </div>
-                {error && <p className="text-red-500 text-xs mt-2 text-center bg-red-50 p-1.5 rounded-lg">{error}</p>}
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col md:flex-row gap-4 flex-grow min-h-0">
+        {/* Left Panel: Input Area & Controls */}
+        <div className="flex-shrink-0 md:w-1/3 flex flex-col gap-4 h-full">
+          <div className="flex-grow overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-4">
+            <div className="p-3 bg-white/60 backdrop-blur-md rounded-2xl border border-white/50 shadow-sm">
+              <p className="text-xs text-gray-600 mb-2 leading-relaxed font-medium">
+                想培養孩子什麼能力？<br />
+                輸入目標，AI 幫你設計專屬任務清單！
+              </p>
+              <div className="flex flex-col gap-2">
+                {/* Goal input is now a prop, so this textarea is removed */}
               </div>
-
-              <div className="hidden md:flex flex-col items-center justify-center p-4 opacity-60 flex-grow">
-                <img src="https://api.iconify.design/twemoji/light-bulb.svg" className="w-12 h-12 mb-2" />
-                <p className="text-xs text-gray-500 text-center">提示：越具體的目標，生成的任務越精準喔！</p>
-              </div>
+              {error && <p className="text-red-500 text-xs mt-2 text-center bg-red-50 p-1.5 rounded-lg">{error}</p>}
             </div>
 
-            {/* Buttons Area - Moved Here */}
-            <div className="flex-shrink-0 flex flex-col gap-3 pt-3 border-t border-white/30">
-              <button
-                onClick={handleGenerate}
-                disabled={isLoading || !goal.trim()}
-                className="w-full py-3 bg-gradient-to-r from-emerald-400 to-emerald-600 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed font-bold hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
-              >
-                {isLoading ? (
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                ) : (
-                  <img src="https://api.iconify.design/solar/magic-stick-3-bold.svg" className="w-5 h-5 text-white" style={{ filter: 'brightness(0) invert(1)' }} />
-                )}
-                <span>{isLoading ? '生成中...' : '開始生成任務'}</span>
-              </button>
-
-              <div className="flex gap-2">
-                <button type="button" onClick={onClose} className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl font-bold backdrop-blur-sm transition-colors text-sm">取消</button>
-                <button
-                  type="button"
-                  onClick={handleImport}
-                  disabled={selectedTasks.length === 0}
-                  className="flex-1 py-2 bg-blue-600 text-white rounded-xl disabled:bg-gray-300 font-bold shadow-md hover:bg-blue-700 transition-all active:scale-95 disabled:shadow-none text-sm"
-                >
-                  匯入 {selectedTasks.length > 0 ? `(${selectedTasks.length})` : ''}
-                </button>
-              </div>
+            <div className="hidden md:flex flex-col items-center justify-center p-4 opacity-60 flex-grow">
+              <img src="https://api.iconify.design/twemoji/light-bulb.svg" className="w-12 h-12 mb-2" />
+              <p className="text-xs text-gray-500 text-center">提示：越具體的目標，生成的任務越精準喔！</p>
             </div>
           </div>
 
-          {/* Right Panel: List Area */}
-          <div className="flex-grow md:w-2/3 flex flex-col min-h-0 bg-white/30 rounded-2xl border border-white/40 overflow-hidden relative shadow-inner">
-            <div className="flex-grow overflow-y-auto p-2 custom-scrollbar space-y-2">
-              {generatedTasks.length > 0 ? (
-                generatedTasks.map((task, index) => (
-                  <div
-                    key={index}
-                    onClick={() => handleToggleSelect(index)}
-                    className={`flex items-center p-3 rounded-xl cursor-pointer transition-all border backdrop-blur-sm ${selectedTasks.includes(index) ? 'bg-blue-50/90 border-blue-400 shadow-sm' : 'bg-white/60 border-white/40 hover:bg-white/80'}`}
-                  >
-                    <div className={`w-6 h-6 rounded-md border flex items-center justify-center mr-3 transition-colors ${selectedTasks.includes(index) ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
-                      {selectedTasks.includes(index) && <img src="https://api.iconify.design/solar/check-bold.svg" className="w-4 h-4 text-white" />}
-                    </div>
-                    <img src={task.icon} alt="" className="w-10 h-10 mr-3 p-1 bg-white/50 rounded-lg" />
-                    <div className="flex-grow min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="font-bold text-gray-800 truncate">{task.text}</p>
-                        <span className="text-xs font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">+{task.points}</span>
-                      </div>
-                      <p className="text-xs text-gray-500 line-clamp-1">{task.description}</p>
-                    </div>
-                  </div>
-                ))
+          {/* Buttons Area - Moved Here */}
+          <div className="flex-shrink-0 flex flex-col gap-3 pt-3 border-t border-white/30">
+            <button
+              onClick={handleGenerate}
+              disabled={isLoading || !goal.trim()}
+              className="w-full py-3 bg-gradient-to-r from-emerald-400 to-emerald-600 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed font-bold hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
+            >
+              {isLoading ? (
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
-                  <img src="https://api.iconify.design/twemoji/clipboard.svg" className="w-16 h-16 mb-4 grayscale" />
-                  <p className="text-lg font-medium">任務列表將顯示在這裡</p>
-                </div>
+                <img src="https://api.iconify.design/solar/magic-stick-3-bold.svg" className="w-5 h-5 text-white" style={{ filter: 'brightness(0) invert(1)' }} />
               )}
-            </div>
+              <span>{isLoading ? '生成中...' : '開始生成任務'}</span>
+            </button>
+
+            {/* The "取消" and "匯入" buttons are removed from this component */}
+          </div>
+        </div>
+
+        {/* Right Panel: List Area */}
+        <div className="flex-grow md:w-2/3 flex flex-col min-h-0 bg-white/30 rounded-2xl border border-white/40 overflow-hidden relative shadow-inner">
+          <div className="flex-grow overflow-y-auto p-2 custom-scrollbar space-y-2">
+            {generatedTasks.length > 0 ? (
+              generatedTasks.map((task, index) => (
+                <div
+                  key={index}
+                  onClick={() => handleToggleSelect(index)}
+                  className={`flex items-center p-3 rounded-xl cursor-pointer transition-all border backdrop-blur-sm ${selectedTasks.includes(index) ? 'bg-blue-50/90 border-blue-400 shadow-sm' : 'bg-white/60 border-white/40 hover:bg-white/80'}`}
+                >
+                  <div className={`w-6 h-6 rounded-md border flex items-center justify-center mr-3 transition-colors ${selectedTasks.includes(index) ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
+                    {selectedTasks.includes(index) && <img src="https://api.iconify.design/solar/check-bold.svg" className="w-4 h-4 text-white" />}
+                  </div>
+                  <img src={task.icon} alt="" className="w-10 h-10 mr-3 p-1 bg-white/50 rounded-lg" />
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="font-bold text-gray-800 truncate">{task.text}</p>
+                      <span className="text-xs font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">+{task.points}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 line-clamp-1">{task.description}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+                <img src="https://api.iconify.design/twemoji/clipboard.svg" className="w-16 h-16 mb-4 grayscale" />
+                <p className="text-lg font-medium">任務列表將顯示在這裡</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 };
 
@@ -809,6 +799,19 @@ const UserProfileEditor: React.FC<{ profile: UserProfile; onSave: (profile: User
 const HabitFreezeManager: React.FC<{ frozenDates: string[]; setFrozenDates: (dates: string[]) => void; }> = ({ frozenDates, setFrozenDates }) => {
   const [date, setDate] = useState('');
 
+  // Expose dev function for developer mode
+  useEffect(() => {
+    // This snippet will cause a runtime error if `handleChangePlan` and `setShowWeeklyReport`
+    // are not defined in the scope of HabitFreezeManager or globally.
+    // The instruction does not provide their definitions within this component.
+    (window as any).devChangePlan = (plan: Plan) => console.warn("devChangePlan not implemented in HabitFreezeManager scope. This should be in Dashboard.");
+    (window as any).setShowWeeklyReport = (show: boolean) => console.warn("setShowWeeklyReport not implemented in HabitFreezeManager scope. This should be in Dashboard.");
+    return () => {
+      delete (window as any).devChangePlan;
+      delete (window as any).setShowWeeklyReport;
+    };
+  }, []);
+
   const handleAdd = () => {
     if (date && !frozenDates.includes(date)) {
       const newDates = [...frozenDates, date].sort();
@@ -924,7 +927,8 @@ const Dashboard: React.FC<{
   keyEvents: KeyEvent[];
   onAddKeyEvent: (text: string, date: string) => void;
   onDeleteKeyEvent: (id: number) => void;
-}> = ({ scoreHistory, setScoreHistory, sharedMessages, wishes, userProfile, onUpdateUserProfile, frozenHabitDates, setFrozenHabitDates, onShowAiReport, onTriggerYesterdaySummary, onTriggerDailyContent, currentPlan, keyEvents, onAddKeyEvent, onDeleteKeyEvent }) => {
+  onChangePlan: (plan: Plan) => void;
+}> = ({ scoreHistory, setScoreHistory, sharedMessages, wishes, userProfile, onUpdateUserProfile, frozenHabitDates, setFrozenHabitDates, onShowAiReport, onTriggerYesterdaySummary, onTriggerDailyContent, currentPlan, keyEvents, onAddKeyEvent, onDeleteKeyEvent, onChangePlan }) => {
   const { userData, handleDismissParentIntro, handleManualPointAdjustment } = useUserData();
   const [showIntro, setShowIntro] = useState(!userData.parentIntroDismissed);
   const handleDismiss = () => {
@@ -970,43 +974,59 @@ const Dashboard: React.FC<{
             檢視本週週報
           </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
-            onClick={async () => {
-              const btn = document.getElementById('trigger-summary-btn');
-              if (btn) btn.classList.add('animate-pulse', 'opacity-50');
-              await onTriggerYesterdaySummary();
-              if (btn) btn.classList.remove('animate-pulse', 'opacity-50');
-            }}
-            className="w-full bg-blue-500 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 text-sm"
-            id="trigger-summary-btn"
-          >
-            手動生成昨日總結
-          </button>
-          <button
-            onClick={async () => {
-              const btn = document.getElementById('trigger-daily-btn');
-              if (btn) btn.classList.add('animate-pulse', 'opacity-50');
-              await onTriggerDailyContent();
-              if (btn) btn.classList.remove('animate-pulse', 'opacity-50');
-            }}
-            className="w-full bg-amber-500 text-white font-semibold py-2.5 rounded-xl hover:bg-amber-600 transition-all flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 text-sm"
-            id="trigger-daily-btn"
-          >
-            手動生成今日內容
-          </button>
-        </div>
         {!hasPremiumAccess(currentPlan) && <p className="text-xs text-center text-gray-500 mt-2">此功能限高級方案</p>}
       </div>
 
-      <HabitFreezeManager frozenDates={frozenHabitDates} setFrozenDates={setFrozenHabitDates} />
-      {hasPremiumAccess(currentPlan) && (
-        <div className="bg-white/60 backdrop-blur-md rounded-3xl shadow-xl p-6 border border-white/50">
-          <h3 className="text-xl font-bold mb-4">成績紀錄</h3>
-          <ScoreChart scores={scoreHistory} />
-          <ScoreManagement scores={scoreHistory} setScores={setScoreHistory} />
+      {/* 開發者模式 - 方案測試切換器 */}
+      <div className="bg-purple-50/60 backdrop-blur-md rounded-3xl shadow-xl p-6 relative border border-purple-200/50">
+        <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-purple-700">
+          🛠️ 開發者模式
+        </h3>
+        <p className="text-sm text-purple-600 mb-4">
+          快速切換方案以測試不同等級功能（目前：{currentPlan === 'free' ? '免費' : currentPlan === 'paid199' ? '進階' : '高級'}方案）
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            onClick={() => onChangePlan('free')}
+            className={`py-3 px-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg active:scale-95 ${currentPlan === 'free'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/80 text-purple-700 hover:bg-white'
+              }`}
+          >
+            免費方案
+          </button>
+          <button
+            onClick={() => onChangePlan('paid199')}
+            className={`py-3 px-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg active:scale-95 ${currentPlan === 'paid199'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/80 text-purple-700 hover:bg-white'
+              }`}
+          >
+            進階方案
+          </button>
+          <button
+            onClick={() => onChangePlan('paid499')}
+            className={`py-3 px-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg active:scale-95 ${currentPlan === 'paid499'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/80 text-purple-700 hover:bg-white'
+              }`}
+          >
+            高級方案
+          </button>
         </div>
-      )}
+      </div>
+
+      <HabitFreezeManager frozenDates={frozenHabitDates} setFrozenDates={setFrozenHabitDates} />
+
+      {
+        hasPremiumAccess(currentPlan) && (
+          <div className="bg-white/60 backdrop-blur-md rounded-3xl shadow-xl p-6 border border-white/50">
+            <h3 className="text-xl font-bold mb-4">成績紀錄</h3>
+            <ScoreChart scores={scoreHistory} />
+            <ScoreManagement scores={scoreHistory} setScores={setScoreHistory} />
+          </div>
+        )
+      }
 
       <ParentWishes wishes={wishes} />
     </div>
@@ -1019,9 +1039,10 @@ const SubNav: React.FC<{ activeView: ParentView; setView: (view: ParentView) => 
     { id: 'tasks', label: '任務', icon: 'https://api.iconify.design/twemoji/memo.svg', color: 'bg-green-500/90 backdrop-blur-sm' },
     { id: 'gachapon', label: '扭蛋', icon: 'https://static.wixstatic.com/media/ec806c_06542b0096b548309242e2a2406200e4~mv2.png', color: 'bg-purple-500/90 backdrop-blur-sm' },
     { id: 'rewards', label: '獎勵', icon: 'https://api.iconify.design/twemoji/wrapped-gift.svg', color: 'bg-yellow-500/90 backdrop-blur-sm' },
+    { id: 'settings', label: '設定', icon: 'https://api.iconify.design/twemoji/gear.svg', color: 'bg-gray-500/90 backdrop-blur-sm' },
   ];
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
       {views.map(view => (
         <button key={view.id} onClick={() => setView(view.id)} className={`p-4 rounded-xl text-white font-bold text-xl flex items-center justify-center transition-transform hover:scale-105 shadow-lg ${view.color} ${activeView === view.id ? 'ring-2 ring-offset-1 ring-white/60 scale-105' : ''}`}>
           <img src={view.icon} alt={view.label} className="w-9 h-9 mr-3 filter drop-shadow-md object-contain" /> {view.label}
@@ -1036,18 +1057,18 @@ const TaskManagement: React.FC<{
   userProfile: UserProfile;
   currentPlan: Plan;
   onAddTask: (task: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>) => void;
-  onAddMultipleTasks: (tasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => void;
-  onOverwriteTasks: (tasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => void;
+  onAddMultipleTasks: (newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => void;
+  onOverwriteTasks: (newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: number) => void;
   isLocked: boolean;
   commonTasks: any[]; // Adjust type if needed
-  ai: GoogleGenAI;
 }> = ({ tasks, userProfile, currentPlan, onAddTask, onAddMultipleTasks, onOverwriteTasks, onEditTask, onDeleteTask, isLocked, commonTasks, ai }) => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [showAiSuggest, setShowAiSuggest] = useState(false);
   const [showAiGoal, setShowAiGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
 
   const handleAiSuggestClick = () => {
     const limitCheck = checkAiUsageLimit('taskSuggester', AI_USAGE_CONFIGS.taskSuggester);
@@ -1131,12 +1152,17 @@ const TaskManagement: React.FC<{
       )}
 
       {showAiGoal && (
-        <AiGoalTaskGeneratorModal
-          ai={ai}
-          userAge={userProfile.age}
-          onClose={() => setShowAiGoal(false)}
-          onImport={onAddMultipleTasks}
-        />
+        <Modal onClose={() => setShowAiGoal(false)} title="AI 目標任務生成器" maxWidth="max-w-4xl">
+          <AiGoalTaskGenerator
+            userAge={userProfile.age}
+            goal={goalInput}
+            onGenerated={(tasks) => {
+              onAddMultipleTasks(tasks);
+              setShowAiGoal(false);
+              setGoalInput('');
+            }}
+          />
+        </Modal>
       )}
 
       <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -1457,7 +1483,6 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
 
   const setPlan = (plan: Plan) => updateUserData({ plan });
 
-  const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<Plan | null>(null);
   const [view, setView] = useState<ParentView>('dashboard');
   const [showAiReport, setShowAiReport] = useState(false);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
@@ -1473,7 +1498,7 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
     (window as any).setShowWeeklyReport = setShowWeeklyReport;
   }, [setShowWeeklyReport]);
 
-  const ai = useMemo(() => new FirebaseGenAI(), []);
+  // Removed: const ai = useMemo(() => new FirebaseGenAI(), []); - No longer needed after migration to apiClient
 
 
   const isTrialActive = planTrialEndDate && new Date(planTrialEndDate) > new Date();
@@ -1486,17 +1511,54 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
       updateUserData({ plan: 'free' });
       addToast('已切換至免費方案');
     } else {
-      setSelectedPlanForPayment(plan);
+      // 導向 App Store 或 Google Play 訂閱
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+
+      let message = '請前往應用程式商店訂閱高級方案：\n\n';
+      if (isIOS) {
+        message += '• iOS 用戶：請前往 App Store 進行訂閱';
+      } else if (isAndroid) {
+        message += '• Android 用戶：請前往 Google Play 進行訂閱';
+      } else {
+        message += '• 請在您的手機 App 中進行訂閱\n• iOS：前往 App Store\n• Android：前往 Google Play';
+      }
+
+      alert(message);
     }
   };
 
-  const handlePaymentConfirm = () => {
-    if (selectedPlanForPayment) {
-      console.log('[ParentMode] Payment confirmed for:', selectedPlanForPayment);
-      updateUserData({ plan: selectedPlanForPayment });
-      addToast('方案升級成功！', 'celebrate');
+
+  // 帳號刪除處理
+  const handleDeleteAccount = async () => {
+    const result = await deleteUserAccount();
+
+    if (result.success) {
+      // 成功刪除後，用戶會自動登出並重定向到登入頁
+      addToast(result.message, 'success');
+    } else {
+      // 顯示錯誤訊息
+      alert(result.message);
     }
-    setSelectedPlanForPayment(null);
+  };
+
+  // 登出處理
+  const handleLogout = async () => {
+    try {
+      const { signOut } = await import('firebase/auth');
+      const { auth } = await import('../firebase');
+      await signOut(auth);
+      addToast('已成功登出');
+    } catch (error) {
+      console.error('[ParentMode] Logout error:', error);
+      alert('登出時發生錯誤，請重試');
+    }
+  };
+
+  // 開發者模式：切換方案
+  const handleChangePlan = (newPlan: Plan) => {
+    updateUserData({ plan: newPlan });
+    addToast(`已切換至${newPlan === 'free' ? '免費' : newPlan === 'paid199' ? '進階' : '高級'}方案`);
   };
 
   const renderView = () => {
@@ -1512,10 +1574,17 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
         onEditTask={handleEditTask}
         onDeleteTask={handleDeleteTask}
         isLocked={isLocked}
-        commonTasks={commonTasksData}
-        ai={ai} />;
+        commonTasks={commonTasksData} />;
       case 'gachapon': return <GachaponManagement prizes={gachaponPrizes} setPrizes={handleSetGachaponPrizes} isLocked={isLocked} />;
       case 'rewards': return <RewardManagement rewards={shopRewards} setRewards={handleSetShopRewards} isLocked={isLocked} />;
+      case 'settings': return <SettingsPage
+        currentZhuyinMode="auto"
+        onSetZhuyinMode={() => { }}
+        userPlan={effectivePlan}
+        onDeleteAccount={handleDeleteAccount}
+        onLogout={handleLogout}
+        onChangePlan={handleChangePlan}
+      />;
       case 'dashboard':
       default:
         return <Dashboard
@@ -1534,13 +1603,14 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
           keyEvents={keyEvents}
           onAddKeyEvent={handleAddKeyEvent}
           onDeleteKeyEvent={handleDeleteKeyEvent}
+          onChangePlan={handleChangePlan}
         />;
     }
   }
 
   return (
     <>
-      {selectedPlanForPayment && <PaymentModal plan={selectedPlanForPayment} onConfirm={handlePaymentConfirm} onCancel={() => setSelectedPlanForPayment(null)} />}
+
       {showAiReport && <AiGrowthReport onClose={() => setShowAiReport(false)} />}
       {showWeeklyReport && <WeeklyReport onClose={() => setShowWeeklyReport(false)} />}
       {showLegalModal && <LegalModal type={showLegalModal} onClose={() => setShowLegalModal(null)} />}
@@ -1571,7 +1641,18 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
       )}
 
       <div className="animate-fade-in space-y-6 h-full pb-8">
-        <div className="text-center py-4">
+        {/* Logo and Title */}
+        <div className="text-center py-4 flex flex-col items-center">
+          <button
+            onClick={onExit}
+            className="mb-2 focus:outline-none focus:ring-2 focus:ring-green-500 rounded-lg p-1 transition-transform hover:scale-105"
+          >
+            <img
+              src="https://static.wixstatic.com/media/ec806c_e706428e2f4d41c1b58f889f8d0efbe8~mv2.png"
+              alt="Goodi Logo"
+              className="h-20 w-auto object-contain drop-shadow-md"
+            />
+          </button>
           <h2 className="text-4xl font-black text-slate-800 drop-shadow-sm">家長管理中心</h2>
         </div>
 

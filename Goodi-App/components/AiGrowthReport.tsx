@@ -85,9 +85,20 @@ const AiGrowthReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setReport('📅 本週成長報告尚未生成\n\n報告會在每週六凌晨自動生成，屆時您登入即可查看！\n\n在等待的同時，繼續陪伴孩子一起成長吧！🌟');
         setIsLoading(false);
 
-      } catch (error) {
+      } catch (error: any) {
         console.error('AI Growth Report fetch failed:', error);
-        setReport('抱歉，讀取報告時發生錯誤。請稍後再試。');
+
+        // 使用友善的錯誤訊息
+        let errorMessage = '🦖 Goodi 讀取報告時遇到困難\n\n';
+        if (error.message?.includes('資料連線異常') || error.message?.includes('network')) {
+          errorMessage += '請檢查網路連線後重新整理頁面';
+        } else if (error.message?.includes('Permission denied')) {
+          errorMessage += '您可能沒有權限查看此報告';
+        } else {
+          errorMessage += '請稍後重新整理頁面，或聯繫客服協助';
+        }
+
+        setReport(errorMessage);
         setIsLoading(false);
       }
     };

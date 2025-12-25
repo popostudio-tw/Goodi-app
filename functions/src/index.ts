@@ -248,19 +248,23 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
   }
 }
 
-// Scheduled Function: Runs every day at 01:00 Taipei time
+// === 每日內容生成排程（優化版）===
+
+// Scheduled Function: 每週日批量生成整週內容（節省 API 費用）
 import { onSchedule } from "firebase-functions/v2/scheduler";
-export const scheduledDailyContent = onSchedule(
+export const scheduledWeeklyDailyContent = onSchedule(
   {
-    schedule: "0 1 * * *",
+    schedule: "0 1 * * 0", // 每週日凌晨 01:00 台灣時間
     timeZone: "Asia/Taipei",
     secrets: ["GEMINI_API_KEY"],
   },
   async (event) => {
-    // Story D: Pre-generate 3 days (Today, T+1, T+2)
     const baseDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
 
-    for (let i = 0; i <= 2; i++) {
+    console.log(`[Weekly Generation] Starting weekly batch generation for ${baseDate.toISOString().split('T')[0]}`);
+
+    // 生成整週內容（7天）
+    for (let i = 0; i <= 6; i++) {
       const target = new Date(baseDate);
       target.setDate(target.getDate() + i);
 
@@ -269,15 +273,52 @@ export const scheduledDailyContent = onSchedule(
       const day = String(target.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
 
-      console.log(`[Scheduled] Processing daily content for ${dateStr} (T+${i})`);
+      console.log(`[Weekly Generation] Processing ${dateStr} (Day ${i + 1}/7)`);
       try {
         await generateAndStoreDailyContent(dateStr);
+        console.log(`[Weekly Generation] ✅ Successfully generated content for ${dateStr}`);
       } catch (err) {
-        console.error(`Failed to process scheduled content for ${dateStr}:`, err);
+        console.error(`[Weekly Generation] ❌ Failed to generate content for ${dateStr}:`, err);
       }
 
       // Wait 2s between dates to space out API calls
       await new Promise(r => setTimeout(r, 2000));
+    }
+
+    console.log(`[Weekly Generation] Completed weekly batch generation`);
+  }
+);
+
+// Scheduled Function: 每日檢查機制（輕量級備援）
+export const dailyContentCheck = onSchedule(
+  {
+    schedule: "30 1 * * *", // 每天凌晨 01:30 台灣時間（在週報之後）
+    timeZone: "Asia/Taipei",
+    secrets: ["GEMINI_API_KEY"],
+  },
+  async (event) => {
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const db = getFirestore();
+    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    console.log(`[Daily Check] Checking content for ${dateStr}`);
+
+    try {
+      const doc = await db.collection('dailyContent').doc(dateStr).get();
+
+      if (!doc.exists || doc.data()?.status !== 'completed') {
+        console.log(`[Daily Check] ⚠️ Missing or incomplete content for ${dateStr}, generating now...`);
+        await generateAndStoreDailyContent(dateStr);
+        console.log(`[Daily Check] ✅ Successfully generated missing content for ${dateStr}`);
+      } else {
+        console.log(`[Daily Check] ✅ Content for ${dateStr} exists and is complete`);
+      }
+    } catch (err) {
+      console.error(`[Daily Check] ❌ Error checking/generating content for ${dateStr}:`, err);
     }
   }
 );
@@ -881,9 +922,20 @@ export const triggerWeeklyReport = onCall(
 
       console.log(`Weekly report generated successfully for user: ${userId}`);
 
+      // 直接返回報告資料，前端不需要再查詢 Firestore
       return {
         success: true,
+        fromCache: false,
         weekKey,
+        report: {
+          content: reportContent,
+          stats: {
+            tasksCompleted: weeklyTasks.length,
+            scoresReported: weeklyScores.length,
+            journalEntries: weeklyJournals.length,
+          },
+          generatedAt: new Date().toISOString()
+        },
         message: "週報已成功生成！",
       };
 
@@ -1008,6 +1060,8 @@ export const triggerYesterdaySummary = onCall(
   }
 );
 
-// === PayPal Integration ===
-export { createPaypalOrder } from "./createPaypalOrder";
-export { handlePaypalWebhook } from "./handlePaypalWebhook";
+// Account Deletion - Apple App Store Compliance Requirement
+export { deleteUserAccount } from './deleteUserAccount';
+
+// === �t�Ϊ��A�ʱ� ===
+export { getSystemStatus } from './getSystemStatus';

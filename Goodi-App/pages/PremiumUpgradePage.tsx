@@ -51,12 +51,20 @@ const PremiumUpgradePage: React.FC<PremiumUpgradePageProps> = ({ onUpgrade }) =>
     }, [currentUser]);
 
     const handleUpgradeClick = async () => {
-        if (onUpgrade) {
-            await onUpgrade(selectedPlan);
+        // 導向 App Store 或 Google Play 訂閱
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/.test(navigator.userAgent);
+
+        let message = '請前往應用程式商店訂閱高級方案：\n\n';
+        if (isIOS) {
+            message += '• iOS 用戶：請前往 App Store 進行訂閱';
+        } else if (isAndroid) {
+            message += '• Android 用戶：請前往 Google Play 進行訂閱';
         } else {
-            // 導航到三段式升級流程
-            navigate('/premium/upgrade-flow', { state: { selectedPlan } });
+            message += '• 請在您的手機 App 中進行訂閱\n• iOS：前往 App Store\n• Android：前往 Google Play';
         }
+
+        alert(message);
     };
 
     const currentHour = new Date().getHours();

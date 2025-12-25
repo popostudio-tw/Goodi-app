@@ -1,8 +1,11 @@
 
+
 import React, { useState } from 'react';
 import { ZhuyinMode, Plan } from '../types';
 import { getPlanDisplayName, isLifetimePlan, hasPremiumAccess } from '../utils/planUtils';
-import GeminiApiKeyManager from '../components/GeminiApiKeyManager';
+// Removed: GeminiApiKeyManager - Security improvement
+
+
 
 interface SettingsPageProps {
   // Zhuyin mode settings
@@ -19,8 +22,12 @@ interface SettingsPageProps {
   onSaveApiKey?: (key: string) => void;
   onValidateApiKey?: () => void;
 
-  // Account deletion
+  // Account management
   onDeleteAccount?: () => void;
+  onLogout?: () => void;
+
+  // Developer mode
+  onChangePlan?: (plan: Plan) => void;
 }
 
 const SettingsPage: React.FC<SettingsPageProps> = ({
@@ -33,6 +40,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
   onSaveApiKey,
   onValidateApiKey,
   onDeleteAccount,
+  onLogout,
+  onChangePlan,
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -66,8 +75,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
               key={mode}
               onClick={() => onSetZhuyinMode(mode)}
               className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${currentZhuyinMode === mode
-                  ? 'bg-blue-50/50 border-blue-500 backdrop-blur-sm'
-                  : 'bg-white/50 border-white/60 hover:bg-blue-50/30 backdrop-blur-sm'
+                ? 'bg-blue-50/50 border-blue-500 backdrop-blur-sm'
+                : 'bg-white/50 border-white/60 hover:bg-blue-50/30 backdrop-blur-sm'
                 }`}
             >
               <div className="flex items-center">
@@ -94,30 +103,84 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </div>
 
-      {/* Gemini API Key 管理 - 僅買斷版高級用戶顯示 */}
+      {/* Gemini API Key Management - REMOVED FOR SECURITY
       {needsApiKey && onSaveApiKey && (
-        <GeminiApiKeyManager
-          currentKey={geminiApiKey}
-          onSave={onSaveApiKey}
-          onValidate={onValidateApiKey}
-        />
-      )}
-
-      {/* 帳號管理 */}
-      {onDeleteAccount && (
         <div className="bg-white/60 backdrop-blur-md rounded-xl shadow-md p-4 border border-white/50">
-          <h3 className="font-bold text-lg mb-3 text-gray-700">帳號管理</h3>
-          <button
-            onClick={handleDeleteClick}
-            className="w-full bg-red-500/80 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-          >
-            刪除帳號
-          </button>
-          <p className="text-xs text-gray-500 mt-2">
-            ⚠️ 此操作無法復原，將永久刪除您的所有資料
-          </p>
+          <p className="text-sm text-gray-600">API Key 管理功能已暫時移除以提升安全性</p>
         </div>
       )}
+      */}
+
+      {/* 開發者模式 - 測試用 */}
+      <div className="bg-purple-50/60 backdrop-blur-md rounded-xl shadow-md p-4 border border-purple-200/50">
+        <h3 className="font-bold text-lg mb-3 text-purple-700">🛠️ 開發者模式</h3>
+        <p className="text-xs text-purple-600 mb-3">快速切換方案以測試不同等級功能</p>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => onChangePlan?.('free')}
+            className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${userPlan === 'free'
+              ? 'bg-purple-100/50 border-purple-500 backdrop-blur-sm'
+              : 'bg-white/50 border-white/60 hover:bg-purple-50/30 backdrop-blur-sm'
+              }`}
+          >
+            <p className={`font-semibold ${userPlan === 'free' ? 'text-purple-700' : 'text-gray-800'}`}>免費方案</p>
+            <p className="text-xs text-gray-500">基礎功能</p>
+          </button>
+
+          <button
+            onClick={() => onChangePlan?.('paid199')}
+            className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${userPlan === 'paid199'
+              ? 'bg-purple-100/50 border-purple-500 backdrop-blur-sm'
+              : 'bg-white/50 border-white/60 hover:bg-purple-50/30 backdrop-blur-sm'
+              }`}
+          >
+            <p className={`font-semibold ${userPlan === 'paid199' ? 'text-purple-700' : 'text-gray-800'}`}>進階方案 (NT$ 199)</p>
+            <p className="text-xs text-gray-500">專注計時、親子時光</p>
+          </button>
+
+          <button
+            onClick={() => onChangePlan?.('paid499')}
+            className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${userPlan === 'paid499'
+              ? 'bg-purple-100/50 border-purple-500 backdrop-blur-sm'
+              : 'bg-white/50 border-white/60 hover:bg-purple-50/30 backdrop-blur-sm'
+              }`}
+          >
+            <p className={`font-semibold ${userPlan === 'paid499' ? 'text-purple-700' : 'text-gray-800'}`}>高級方案 (NT$ 499)</p>
+            <p className="text-xs text-gray-500">心事樹洞、成就系統、完整AI功能</p>
+          </button>
+        </div>
+      </div>
+
+      {/* 帳號管理 */}
+      <div className="bg-white/60 backdrop-blur-md rounded-xl shadow-md p-4 border border-white/50">
+        <h3 className="font-bold text-lg mb-3 text-gray-700">帳號管理</h3>
+
+        {/* 登出按鈕 */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="w-full bg-gray-500/80 hover:bg-gray-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors mb-3"
+          >
+            登出 Google 帳號
+          </button>
+        )}
+
+        {/* 刪除帳號按鈕 */}
+        {onDeleteAccount && (
+          <>
+            <button
+              onClick={handleDeleteClick}
+              className="w-full bg-red-500/80 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+            >
+              刪除帳號
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              ⚠️ 此操作無法復原，將永久刪除您的所有資料
+            </p>
+          </>
+        )}
+      </div>
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

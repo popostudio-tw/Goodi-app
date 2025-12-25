@@ -10,8 +10,6 @@ import AppContent from './AppContent'; // Assuming your main app content is refa
 import LegalPage from './components/LegalPage';
 import PremiumUpgradePage from './pages/PremiumUpgradePage';
 import PremiumUpgradeFlow from './pages/PremiumUpgradeFlow';
-import PaymentSuccess from './pages/PaymentSuccess';
-import PaymentCancel from './pages/PaymentCancel';
 
 // --- Full Screen Spinner --- //
 const FullScreenSpinner: React.FC = () => (
@@ -74,23 +72,6 @@ const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             <PremiumUpgradeFlow />
-          </ProtectedRoute>
-        }
-      />
-      {/* PayPal 付款結果頁面 */}
-      <Route
-        path="/payment/success"
-        element={
-          <ProtectedRoute>
-            <PaymentSuccess />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/payment/cancel"
-        element={
-          <ProtectedRoute>
-            <PaymentCancel />
           </ProtectedRoute>
         }
       />

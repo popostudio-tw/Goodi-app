@@ -461,12 +461,34 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
 }
 
 // === Helper: 記錄單次 API 呼叫 ===
+/**
+ * 記錄 API 使用量到 Firestore
+ * 
+ * 新架構：使用 subcollection 避免單一文件過大
+ * - 主文件 (apiUsage/global_{date}): 僅存統計數據 (totalCalls, callsPerSource)
+ * - Subcollection (apiUsage/global_{date}/calls/{callId}): 存每一筆詳細調用記錄
+ */
 async function recordUsage(usageDocRef: FirebaseFirestore.DocumentReference, record: UsageRecord) {
     try {
+        const db = getFirestore();
         const { FieldValue } = await import("firebase-admin/firestore");
+
+        // 1. 將詳細記錄寫入 subcollection（避免主文件無限增長）
+        const callsCollectionRef = usageDocRef.collection('calls');
+        await callsCollectionRef.add({
+            ...record,
+            createdAt: new Date().toISOString()
+        });
+
+        // 2. 更新主文件的統計數據（不再使用 arrayUnion）
         await usageDocRef.set({
-            calls: FieldValue.arrayUnion(record)
+            date: getTodayDateStr(),
+            totalCalls: FieldValue.increment(1),
+            [`callsPerSource.${record.source}`]: FieldValue.increment(1),
+            lastUpdated: new Date().toISOString()
         }, { merge: true });
+
+        console.log(`[Usage] Recorded: ${record.source} (${record.success ? 'success' : 'failed'})`);
     } catch (error) {
         console.error('[Gemini Wrapper] Failed to record usage:', error);
         // 記錄失敗不應阻擋主流程

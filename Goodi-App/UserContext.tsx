@@ -1,6 +1,6 @@
 ﻿import React, { createContext, useState, useCallback, useEffect, useRef, useMemo, useContext } from 'react';
 import { Page, Task, Reward, JournalEntry, Achievement, Plan, UserProfile, ToastMessage, ScoreEntry, Subject, TestType, InventoryItem, Transaction, GachaponPrize, KeyEvent, FocusSessionCounts, UserData } from './types';
-import { GoogleGenAI } from "@google/genai";
+// Removed: import { GoogleGenAI } from "@google/genai"; - Security: API key exposure
 import { db } from './firebase';
 import { User } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
@@ -199,7 +199,8 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
 
   const [isPointsAnimating, setIsPointsAnimating] = useState(false);
 
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string }), []);
+  // Removed: Direct GoogleGenAI usage to prevent API key exposure
+  // TODO: Migrate WhisperTree AI功能to Cloud Function
 
   // --- LOCAL STORAGE SYNC ---
   // Whenever userData changes, save it to localStorage
@@ -260,6 +261,52 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       } catch (error) { console.error("Error saving user data:", error); }
     }
   }, [user]);
+
+  // --- FIRESTORE SYNC ---
+  // Load user data from Firestore when user logs in
+  useEffect(() => {
+    if (!user) {
+      console.log('[UserDataProvider] No user, skipping Firestore sync');
+      return;
+    }
+
+    console.log('[UserDataProvider] Setting up Firestore sync for user:', user.uid);
+
+    const userDocRef = doc(db, 'users', user.uid);
+
+    // Subscribe to real-time updates from Firestore
+    const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        console.log('[UserDataProvider] Loaded data from Firestore');
+        const firestoreData = docSnapshot.data() as UserData;
+
+        // Merge Firestore data with any local changes, Firestore takes priority
+        setUserData(prevData => {
+          // If this is the first load (data is still initial), use Firestore data completely
+          const isInitialLoad = prevData.userProfile.nickname === initialUserData.userProfile.nickname;
+
+          if (isInitialLoad) {
+            console.log('[UserDataProvider] First load, using Firestore data');
+            return firestoreData;
+          } else {
+            // Otherwise, keep local changes but update with any Firestore changes
+            return { ...firestoreData };
+          }
+        });
+      } else {
+        console.log('[UserDataProvider] No data in Firestore, creating initial document');
+        // If no data exists in Firestore, save initial data
+        saveData(userData);
+      }
+    }, (error) => {
+      console.error('[UserDataProvider] Error loading from Firestore:', error);
+    });
+
+    return () => {
+      console.log('[UserDataProvider] Cleaning up Firestore sync');
+      unsubscribe();
+    };
+  }, [user]); // Only re-run when user changes
 
   const updateUserData = useCallback((updates: Partial<Omit<UserData, 'lastLoginDate'>>) => {
     setUserData(prevData => {
@@ -496,6 +543,18 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
   const handleAddEntry = async (text: string) => {
     const userEntry: JournalEntry = { id: Date.now(), text, date: new Date().toISOString(), author: 'user' };
     updateUserData({ journalEntries: [...userData.journalEntries, userEntry] });
+
+    // TODO: Replace with Cloud Function call to avoid API key exposure
+    // For now, provide a static response
+    const goodiEntry: JournalEntry = {
+      id: Date.now() + 1,
+      text: "謝謝你跟我分享！Goodi會一直陪著你的 💚",
+      date: new Date().toISOString(),
+      author: 'goodi'
+    };
+    updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
+
+    /* REMOVED FOR SECURITY: Direct AI call with exposed API key
     try {
       const safetyPrompt = `You are a child safety expert. Analyze the following text from a child for any signs of sadness, distress, bullying, self-harm, or other negative emotions. Respond with ONLY "FLAG" if any such content is found, otherwise respond with ONLY "SAFE". Text: "${text}"`;
       const safetyCheck = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: safetyPrompt });
@@ -520,6 +579,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       const errorEntry: JournalEntry = { id: Date.now() + 1, text: "嗚，Goodi 的訊號好像不太好，等一下再試一次好嗎？", date: new Date().toISOString(), author: 'goodi' };
       updateUserData({ journalEntries: [...userData.journalEntries, userEntry, errorEntry] });
     }
+    */
   };
 
   const handleReportScore = (details: { subject: Subject; testType: TestType; score: number }) => {

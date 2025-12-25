@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useUserData } from '../UserContext';
-import { callGemini } from '../src/services/aiClient';
 import { ScoreEntry, Transaction, JournalEntry, Task } from '../types';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { db, functions } from '../firebase';
+import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../AuthContext';
 
 // Helper: 取得週次 key（例如 2024-W51）
@@ -67,7 +65,6 @@ const WeeklyReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
     const [cachedStats, setCachedStats] = useState<{ tasksCompleted: number; scoresReported: number; journalEntries: number } | null>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
     const [reportExists, setReportExists] = useState(false);
 
     if (!userData || !currentUser) return null;
@@ -124,9 +121,9 @@ const WeeklyReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 setReport('');
                 setIsLoading(false);
 
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Weekly Report fetch failed", error);
-                setReport('抱歉，讀取週報時發生錯誤。請稍後再試。');
+                setReport('🦖 Goodi 讀取報告時遇到困難\n\n請稍後重新整理頁面，或聯繫客服協助。');
                 setIsLoading(false);
             }
         };
@@ -134,34 +131,7 @@ const WeeklyReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         fetchReport();
     }, [currentUser.uid]);
 
-    // 手動觸發週報生成
-    const handleGenerateReport = async () => {
-        setIsGenerating(true);
-        try {
-            const triggerReport = httpsCallable(functions, 'triggerWeeklyReport');
-            await triggerReport({});
-
-            // 重新讀取報告
-            const weekKey = getWeekKey();
-            const reportDoc = await getDoc(
-                doc(db, 'users', currentUser.uid, 'weeklyReports', weekKey)
-            );
-
-            if (reportDoc.exists()) {
-                const data = reportDoc.data();
-                setReport(data.content || '');
-                if (data.stats) {
-                    setCachedStats(data.stats);
-                }
-                setReportExists(true);
-            }
-        } catch (error) {
-            console.error("Manual report generation failed", error);
-            setReport('抱歉，生成週報時發生錯誤。請稍後再試。');
-        } finally {
-            setIsGenerating(false);
-        }
-    };
+    // 註：週報由排程自動生成，前端只讀取已生成的報告
 
     const handleExportPDF = async () => {
         const element = document.getElementById('report-content');
@@ -261,7 +231,7 @@ const WeeklyReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
 
             <div className="bg-white/80 rounded-[2.5rem] p-8 border border-white shadow-xl shadow-slate-200/50 min-h-[400px]">
-                {isLoading || isGenerating ? (
+                {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                         <img
                             src="https://static.wixstatic.com/media/ec806c_e706428e2f4d41c1b58f889f8d0efbe8~mv2.png"
@@ -274,7 +244,7 @@ const WeeklyReport: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse delay-150"></div>
                         </div>
                         <p className="text-slate-500 font-bold max-w-xs leading-relaxed">
-                            {isGenerating ? 'Goodi 正在為您撰寫週報...' : `Goodi 正在用心回憶 ${nickname} 本週每一個精彩的瞬間...`}
+                            Goodi 正在用心回憶 {nickname} 本週每一個精彩的瞬間...
                         </p>
                     </div>
                 ) : !reportExists ? (
