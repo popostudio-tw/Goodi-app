@@ -470,7 +470,8 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
  */
 async function recordUsage(usageDocRef: FirebaseFirestore.DocumentReference, record: UsageRecord) {
     try {
-        const db = getFirestore();
+        // const db = getFirestore(); // 未使用，已註解
+        // 保留 subcollection 儲存資料，但簡化結構
         const { FieldValue } = await import("firebase-admin/firestore");
 
         // 1. 將詳細記錄寫入 subcollection（避免主文件無限增長）

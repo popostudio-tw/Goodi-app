@@ -102,3 +102,19 @@ coverage/
 all_logs.txt
 functions_log.txt
 gemini_logs.txt
+
+# Security - Service Account Keys
+serviceAccountKey.json
+key/
+*.pem
+*.key
+
+# Temporary scripts and data files
+migrate-to-dailyContent.js
+reimport-to-dailyContent.js
+process-q2-data.js
+verify-daily-data.js
+modify-index.py
+may-june-raw.txt
+test.txt
+*-raw.txt

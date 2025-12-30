@@ -1,7 +1,8 @@
 {
   "dependencies": {
     "@dataconnect/generated": "file:src/dataconnect-generated",
-    "@modelcontextprotocol/sdk": "^1.23.0"
+    "@modelcontextprotocol/sdk": "^1.23.0",
+    "firebase-admin": "^13.6.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.22",

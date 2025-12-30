@@ -1,4 +1,4 @@
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+ï»¿import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { callGemini, shouldUseFallback } from "./geminiWrapper";
 
 import { initializeApp as initAdmin } from "firebase-admin/app";
@@ -1063,5 +1063,11 @@ export const triggerYesterdaySummary = onCall(
 // Account Deletion - Apple App Store Compliance Requirement
 export { deleteUserAccount } from './deleteUserAccount';
 
-// === ¨t²Îª¬ºAºÊ±± ===
+// === ï¿½tï¿½Îªï¿½ï¿½Aï¿½Ê±ï¿½ ===
 export { getSystemStatus } from './getSystemStatus';
+
+
+// === AI æ¶æ§‹å„ªåŒ– V2 å‡½å¼ (2025-12-29) ===
+export { generateSafeResponseV2 } from "./generateSafeResponseV2";
+export { scheduledWeeklyReportsV2 } from "./scheduledWeeklyReportsV2";
+export { scheduledDailySummariesV2 } from "./scheduledDailySummariesV2";
