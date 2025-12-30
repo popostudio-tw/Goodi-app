@@ -435,3 +435,10 @@ export async function getSystemStatus(): Promise<ApiResponse<{
 }>> {
     return callFunction('getSystemStatus', {});
 }
+
+/**
+ * 獲取每日內容 (歷史上的今天 + 動物冷知識)
+ */
+export async function getDailyFacts(date?: string): Promise<ApiResponse<{ history: string; animalFact: string; date: string }>> {
+  return callFunction('getDailyFacts', { date });
+}

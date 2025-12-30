@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useUserData } from '../UserContext';
 import TestScoreModal from './TestScoreModal';
-import { getYesterdaySummary, getDailyContent } from '../src/services/apiClient';
+import { getYesterdaySummary } from '../src/services/apiClient';
 import ErrorDisplay from './ErrorDisplay';
 import type { ApiError } from '../src/services/apiClient';
 import fallbackContent from '../src/assets/fallbackContent.json';
+import { getFirestore, collection, doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const WidgetCard: React.FC<{
   icon: string;
@@ -293,105 +295,87 @@ const AiYesterdaySummary: React.FC = () => {
 
 
 const TodayInHistory: React.FC = () => {
-  const [event, setEvent] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [event, setEvent] = useState<string>('');
+  const [loading, setLoading] = useState(true);
 
   const fetchEvent = async () => {
-    setIsLoading(true);
-    setError(null);
+    setLoading(true);
+    try {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD format
 
-    const today = new Date().toISOString().split('T')[0];
+      // 直接從 Firestore dailyContent collection 讀取
+      const docRef = doc(db, 'dailyContent', dateStr);
+      const docSnapshot = await getDoc(docRef);
 
-    // Layer 1: Try API
-    const result = await getDailyContent(today);
-
-    if (result.success && result.data) {
-      const content = result.data.todayInHistory || '';
-      setEvent(content);
-      if (content) localStorage.setItem('lastTodayInHistory', content);
-      setIsLoading(false);
-      return;
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        setEvent(data?.todayInHistory || '今天是個特別的日子！');
+      } else {
+        console.warn(`No daily content found for ${dateStr}`);
+        setEvent('今天是個特別的日子！');
+      }
+    } catch (error) {
+      console.error('Error fetching history from Firestore:', error);
+      setEvent('今天是個特別的日子！');
+    } finally {
+      setLoading(false);
     }
-
-    // Layer 2: Try localStorage
-    const cached = localStorage.getItem('lastTodayInHistory');
-    if (cached) {
-      console.log('[Fallback] Using cached today in history');
-      setEvent(cached);
-      setIsLoading(false);
-      return;
-    }
-
-    // Layer 3: Use static fallback
-    const randomIndex = Math.floor(Math.random() * fallbackContent.todayInHistory.length);
-    const fallback = fallbackContent.todayInHistory[randomIndex];
-    console.log('[Fallback] Using static today in history');
-    setEvent(fallback.content);
-    setIsLoading(false);
   };
 
   useEffect(() => {
     fetchEvent();
   }, []);
 
-  // Remove error display - always show content
-
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/spiral-calendar.svg" title="歷史的今天" color="yellow">
-      {isLoading ? <p>搜尋歷史檔案中...</p> : <p>{event}</p>}
+      {loading ? <p>搜尋歷史檔案中...</p> : <p>{event}</p>}
     </WidgetCard>
   );
 };
 
 const AnimalTrivia: React.FC = () => {
-  const [fact, setFact] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [trivia, setTrivia] = useState<string>('');
+  const [loading, setLoading] = useState(true);
 
   const fetchTrivia = async () => {
-    setIsLoading(true);
-    setError(null);
+    setLoading(true);
+    try {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD format
 
-    const today = new Date().toISOString().split('T')[0];
+      // 直接從 Firestore dailyContent collection 讀取
+      const docRef = doc(db, 'dailyContent', dateStr);
+      const docSnapshot = await getDoc(docRef);
 
-    // Layer 1: Try API
-    const result = await getDailyContent(today);
-
-    if (result.success && result.data) {
-      const content = result.data.animalTrivia || '';
-      setFact(content);
-      if (content) localStorage.setItem('lastAnimalTrivia', content);
-      setIsLoading(false);
-      return;
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        setTrivia(data?.animalTrivia || '動物世界充滿驚喜！');
+      } else {
+        console.warn(`No daily content found for ${dateStr}`);
+        setTrivia('動物世界充滿驚喜！');
+      }
+    } catch (error) {
+      console.error('Error fetching animal trivia from Firestore:', error);
+      setTrivia('動物世界充滿驚喜！');
+    } finally {
+      setLoading(false);
     }
-
-    // Layer 2: Try localStorage
-    const cached = localStorage.getItem('lastAnimalTrivia');
-    if (cached) {
-      console.log('[Fallback] Using cached animal trivia');
-      setFact(cached);
-      setIsLoading(false);
-      return;
-    }
-
-    // Layer 3: Use static fallback
-    const randomIndex = Math.floor(Math.random() * fallbackContent.animalTrivia.length);
-    const fallback = fallbackContent.animalTrivia[randomIndex];
-    console.log('[Fallback] Using static animal trivia');
-    setFact(fallback.content);
-    setIsLoading(false);
   };
 
   useEffect(() => {
     fetchTrivia();
   }, []);
 
-  // Remove error display - always show content
-
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/dog-face.svg" title="動物小知識" color="blue">
-      {isLoading ? <p>尋找有趣的動物故事...</p> : <p>{fact}</p>}
+      {loading ? <p>尋找有趣的動物故事...</p> : <p>{trivia}</p>}
     </WidgetCard>
   );
 };
