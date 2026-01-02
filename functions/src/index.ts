@@ -1068,6 +1068,6 @@ export { getSystemStatus } from './getSystemStatus';
 
 
 // === AI 架構優化 V2 函式 (2025-12-29) ===
-export { generateSafeResponseV2 } from "./generateSafeResponseV2";
+// export { generateSafeResponseV2 } from "./generateSafeResponseV2";
 export { scheduledWeeklyReportsV2 } from "./scheduledWeeklyReportsV2";
-export { scheduledDailySummariesV2 } from "./scheduledDailySummariesV2";
+// export { scheduledDailySummariesV2 } from "./scheduledDailySummariesV2";
