@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ScoreEntry, Subject } from '../types';
 
 interface ScoreChartProps {
@@ -43,9 +43,25 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     const VIEW_WIDTH = WIDTH + PADDING * 2;
     const VIEW_HEIGHT = HEIGHT + PADDING * 2;
 
-    const sortedScores = [...scores].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const uniqueDates = [...new Set(sortedScores.map(s => s.date))];
-    const subjects = [...new Set(sortedScores.map(s => s.subject))];
+    // Optimize: Memoize expensive calculations for sorted scores and derived data
+    // to prevent re-calculation on every render.
+    const { sortedScores, uniqueDates, subjects, dataBySubject } = useMemo(() => {
+        const sorted = [...scores].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const dates = [...new Set(sorted.map(s => s.date))];
+        const subjs = [...new Set(sorted.map(s => s.subject))];
+
+        const bySubject = subjs.reduce((acc, subject) => {
+            acc[subject] = sorted.filter(s => s.subject === subject);
+            return acc;
+        }, {} as Record<Subject, ScoreEntry[]>);
+
+        return {
+            sortedScores: sorted,
+            uniqueDates: dates,
+            subjects: subjs,
+            dataBySubject: bySubject
+        };
+    }, [scores]);
 
     const getX = (date: string) => {
         const index = uniqueDates.indexOf(date);
@@ -56,11 +72,6 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
         return PADDING + HEIGHT - (score / 100) * HEIGHT;
     };
     
-    const dataBySubject = subjects.reduce((acc, subject) => {
-        acc[subject] = sortedScores.filter(s => s.subject === subject);
-        return acc;
-    }, {} as Record<Subject, ScoreEntry[]>);
-
 
     return (
         <div>
