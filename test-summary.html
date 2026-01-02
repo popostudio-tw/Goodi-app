@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>測試昨日總結生成</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background: #f9f9f9;
+      white-space: pre-wrap;
+    }
+    .loading {
+      color: #666;
+    }
+    .success {
+      color: #4CAF50;
+    }
+    .error {
+      color: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <h1>測試昨日總結生成</h1>
+  <p>這個頁面會調用 Cloud Function <code>triggerYesterdaySummary</code> 來為當前用戶生成 AI 昨日總結。</p>
+  
+  <button onclick="triggerSummary()">生成昨日總結</button>
+  
+  <div id="result"></div>
+
+  <script>
+    // Firebase 配置（從你的 .env 文件讀取）
+    const firebaseConfig = {
+      apiKey: "AIzaSyAoSJFJDG2GnW6Dzi6bv2cU3D91K3h9zqM",
+      authDomain: "goodi-5ec49.firebaseapp.com",
+      projectId: "goodi-5ec49",
+      storageBucket: "goodi-5ec49.firebasestorage.app",
+      messagingSenderId: "827364467069",
+      appId: "1:827364467069:web:96a9e1d1e5f6c9f1e6d8e8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const functions = firebase.functions();
+
+    // 檢查登入狀態
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        document.getElementById('result').innerHTML = 
+          `<div class="success">✅ 已登入: ${user.email || user.uid}</div>`;
+      } else {
+        document.getElementById('result').innerHTML = 
+          `<div class="error">❌ 請先登入 Goodi App</div>`;
+      }
+    });
+
+    async function triggerSummary() {
+      const resultDiv = document.getElementById('result');
+      
+      if (!auth.currentUser) {
+        resultDiv.innerHTML = '<div class="error">❌ 請先登入 Goodi App</div>';
+        return;
+      }
+
+      resultDiv.innerHTML = '<div class="loading">⏳ 正在生成昨日總結...</div>';
+
+      try {
+        const triggerYesterdaySummary = functions.httpsCallable('triggerYesterdaySummary');
+        const result = await triggerYesterdaySummary();
+
+        console.log('Result:', result);
+
+        if (result.data.success) {
+          resultDiv.innerHTML = `
+            <div class="success">
+              <h3>✅ 生成成功！</h3>
+              <p><strong>昨日總結：</strong></p>
+              <p>${result.data.summary}</p>
+            </div>
+          `;
+        } else {
+          resultDiv.innerHTML = `
+            <div class="error">
+              <h3>❌ 生成失敗</h3>
+              <p>${JSON.stringify(result.data, null, 2)}</p>
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        resultDiv.innerHTML = `
+          <div class="error">
+            <h3>❌ 錯誤</h3>
+            <p>${error.message}</p>
+            <pre>${JSON.stringify(error, null, 2)}</pre>
+          </div>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

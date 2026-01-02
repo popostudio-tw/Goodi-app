@@ -1,84 +1,172 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 允許已登入的使用者讀寫自己的使用者資料
+    
+    // ==================== Helper Functions ====================
+    
+    // 检查是否为管理员
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // 检查是否为用户本人
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 检查是否可以修改敏感字段
+    function canUpdateSensitiveFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['tokens', 'planLevel', 'planTrialEndDate', 'referralCount']);
+    }
+    
+    // ==================== 用戶主文檔 ====================
     match /users/{userId} {
-      // 允許用戶讀取、創建、更新、刪除自己的文檔
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId
-                     // 如果更新包含 geminiApiKey 字段，確保它是字串類型
-                     && (!request.resource.data.keys().hasAny(['geminiApiKey']) 
-                         || request.resource.data.geminiApiKey is string);
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId);
+      
+      // 限制可更新的字段（防止用戶竄改代幣、會員等級）
+      // 管理員可以修改任何字段
+      allow update: if (isOwner(userId) && canUpdateSensitiveFields()) || isAdmin();
+      
+      allow delete: if isOwner(userId) || isAdmin();
 
-      // 子集合：每日總結
+      // ==================== 子集合：任務 ====================
+      match /tasks/{taskId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // ==================== 子集合：日記 ====================
+      match /journalEntries/{entryId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // ==================== 子集合：樹洞（心事） ====================
+      match /treeHole/{entryId} {
+        // 樹洞內容高度敏感，即使 Admin 也不能直接讀取（除非用戶授權）
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+        // Admin 需要通過特殊 Cloud Function 並記錄日誌才能訪問
+      }
+
+      // ==================== 子集合：成績 ====================
+      match /grades/{gradeId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // ==================== 子集合：交易記錄 ====================
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId) || isAdmin();
+        // 只能通過 Cloud Function 創建，防止竄改代幣
+        allow create: if false;
+        allow update, delete: if isAdmin();  // Admin 可修正錯誤記錄
+      }
+
+      // ==================== 子集合：成就 ====================
+      match /achievements/{achievementId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();  // 只有 Admin 或 Cloud Functions 可寫入
+      }
+
+      // ==================== 子集合：背包/獎勵 ====================
+      match /inventory/{itemId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // ==================== AI 相關 ====================
+      
+      // 每日總結（Cloud Functions 生成）
       match /dailySummaries/{date} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if false;  // 僅 Cloud Functions 寫入
+        allow read: if isOwner(userId) || isAdmin();
+        // 絕對禁止用戶寫入，Admin 可修正
+        allow write: if isAdmin();
       }
 
-      // 子集合：週報
+      // 週報（Cloud Functions 生成）
       match /weeklyReports/{weekKey} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if false;  // 僅 Cloud Functions 寫入
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();
       }
 
-      // 子集合：每日亮點
+      // 每日亮點
       match /highlights/{highlightId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
-      // 子集合：會員資格（Premium 狀態）
+      // ==================== 會員相關 ====================
+      
       match /membership/{docId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow read: if isOwner(userId) || isAdmin();
+        // 只能通過 Cloud Function 修改會員狀態
+        allow write: if isAdmin();
       }
 
-      // 子集合：結帳意圖
       match /checkoutIntents/{intentId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // 子集合：安全標記（心事樹洞風險記錄）
-      match /safetyFlags/{flagId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if false;  // 僅 Cloud Functions 寫入
+        allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
+    // ==================== AI 任務佇列（強化版）====================
+    match /aiTasks/{taskId} {
+      // 允許用戶創建 AI 任務（必須 pending 狀態）
+      allow create: if request.auth != null 
+                     && request.resource.data.userId == request.auth.uid
+                     && request.resource.data.status == 'pending'
+                     && request.resource.data.keys().hasAll(['userId', 'prompt', 'status', 'createdAt']);
+      
+      // 允許用戶讀取自己的 AI 任務
+      // 強化：確保 taskId 對應的 userId 是當前用戶
+      allow read: if (request.auth != null && resource.data.userId == request.auth.uid)
+                   || isAdmin();
+      
+      // 絕對禁止用戶更新或刪除（防止干擾 AI 運算）
+      // 只有 Cloud Functions（通過 Admin SDK）或 Admin 可以修改
+      allow update: if isAdmin();  // Admin 緊急修復用
+      allow delete: if isAdmin();  // Admin 清理用
+    }
+
+    // ==================== 全局集合 ====================
+    
     // 每日內容（歷史的今天、動物冷知識）
-    // 允許所有人讀取（包含未登入用戶），但只有 Cloud Functions 可寫入
     match /dailyContent/{date} {
-      allow read: if true;  // 公開讀取
-      allow write: if false;  // 僅 Cloud Functions 透過 Admin SDK 寫入
+      allow read: if request.auth != null;
+      // Admin 可以手動添加或修正內容
+      allow write: if isAdmin();
     }
 
-    // 促銷碼集合
-    // 用戶可讀取（用於驗證），但只有管理員可寫入
+    // 促銷碼
     match /promoCodes/{code} {
       allow read: if request.auth != null;
-      // 寫入權限預留給管理員（需在 users 集合設置 isAdmin 欄位）
-      allow write: if false;  // 暫時禁止寫入，需要透過 Firebase Console 手動創建
+      // 只有 Admin 可以創建促銷碼
+      allow write: if isAdmin();
     }
 
-    // 使用分析集合
-    // 僅用戶本人可讀寫自己的分析數據
+    // 使用分析
     match /usageAnalytics/{analyticsId} {
-      allow read: if request.auth != null && analyticsId.matches('^' + request.auth.uid + '_.*');
-      allow write: if request.auth != null && analyticsId.matches('^' + request.auth.uid + '_.*');
+      // 只有數據所有者或 Admin 可以訪問
+      allow read: if (request.auth != null && analyticsId.matches('^' + request.auth.uid + '_.*'))
+                   || isAdmin();
+      allow write: if (request.auth != null && analyticsId.matches('^' + request.auth.uid + '_.*'))
+                    || isAdmin();
     }
 
-    // AI 建議快取（全局集合）
-    // 所有用戶可讀取快取，僅 Cloud Functions 可寫入
-    match /aiSuggestionsCache/{cacheKey} {
-      allow read: if true;  // 公開讀取
-      allow write: if false;  // 僅 Cloud Functions 寫入
+    // ==================== Admin 管理集合 ====================
+    
+    // 系統配置（僅 Admin）
+    match /systemConfig/{configId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    // 您可以在此處為其他資料集合新增規則
+    // 審計日誌（僅 Admin）
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;  // 只能通過 Cloud Functions 寫入
+    }
+
+    // ==================== 安全：拒絕所有其他訪問 ====================
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

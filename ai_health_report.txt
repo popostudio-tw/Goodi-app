@@ -1,0 +1,38 @@
+
+=== Goodi AI System Health Check ===
+Time: 2026-01-01T12:02:09.162Z
+======================================================================
+
+[1] Users: Found 5 users
+
+[2] Yesterday date: 2025-12-31
+
+  ✓ 小猴: Has summary (manual_generation)
+  ✓ 小猴姐姐: Has summary (manual_generation)
+  ✓ 小CC: Has summary (manual_generation)
+  ✓ 小猴: Has summary (manual_generation)
+  ✓ 小猴仔: Has summary (manual_generation)
+
+[3] Summary Status: 5 with / 0 without
+
+======================================================================
+
+[4] Circuit Breaker: ✓ CLOSED (OK)
+
+[5] API Usage Today:
+    Total calls: 6
+    Last minute: 0
+
+======================================================================
+
+=== HEALTH ASSESSMENT ===
+
+✓ SYSTEM HEALTHY
+  - Circuit breaker is not blocking API calls
+  - Some users have AI-generated summaries
+  - API usage is being tracked
+
+======================================================================
+
+Report saved to: ai_health_report.txt
+

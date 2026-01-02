@@ -376,7 +376,7 @@ export async function triggerWeeklyReport(): Promise<ApiResponse<{ success: bool
  * æ˜¨æ—¥ç¸½çµç²å–
  */
 export async function getYesterdaySummary(): Promise<ApiResponse<{ summary: string }>> {
-    return callFunction('generateYesterdaySummary', {});
+    return callFunction('triggerYesterdaySummary', {});
 }
 
 /**
@@ -437,8 +437,8 @@ export async function getSystemStatus(): Promise<ApiResponse<{
 }
 
 /**
- * Àò¨ú¨C¤é¤º®e (¾ú¥v¤Wªº¤µ¤Ñ + °Êª«§Nª¾ÃÑ)
+ * ï¿½ï¿½ï¿½ï¿½Cï¿½é¤ºï¿½e (ï¿½ï¿½ï¿½vï¿½Wï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ + ï¿½Êªï¿½ï¿½Nï¿½ï¿½ï¿½ï¿½)
  */
 export async function getDailyFacts(date?: string): Promise<ApiResponse<{ history: string; animalFact: string; date: string }>> {
-  return callFunction('getDailyFacts', { date });
+    return callFunction('getDailyFacts', { date });
 }

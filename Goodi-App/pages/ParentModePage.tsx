@@ -1644,7 +1644,7 @@ const ParentModePage: React.FC<ParentModePageProps> = ({ onExit }) => {
         {/* Logo and Title */}
         <div className="text-center py-4 flex flex-col items-center">
           <button
-            onClick={onExit}
+            onClick={() => setView('dashboard')}
             className="mb-2 focus:outline-none focus:ring-2 focus:ring-green-500 rounded-lg p-1 transition-transform hover:scale-105"
           >
             <img

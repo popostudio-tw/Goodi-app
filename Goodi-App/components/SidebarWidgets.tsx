@@ -5,8 +5,8 @@ import { getYesterdaySummary } from '../src/services/apiClient';
 import ErrorDisplay from './ErrorDisplay';
 import type { ApiError } from '../src/services/apiClient';
 import fallbackContent from '../src/assets/fallbackContent.json';
-import { getFirestore, collection, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { getFirestore, collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 
 const WidgetCard: React.FC<{
   icon: string;
@@ -242,48 +242,97 @@ const DailyStats: React.FC = () => {
 const AiYesterdaySummary: React.FC = () => {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const { userData } = useUserData();
 
-  const fetchSummary = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    // Layer 1: Try API
-    const result = await getYesterdaySummary();
-
-    if (result.success && result.data) {
-      const content = result.data.summary || '';
-      setSummary(content);
-      // Save to localStorage for next time
-      if (content) localStorage.setItem('lastYesterdaySummary', content);
-      setIsLoading(false);
-      return;
-    }
-
-    // Layer 2: Try localStorage
-    const cached = localStorage.getItem('lastYesterdaySummary');
-    if (cached) {
-      console.log('[Fallback] Using cached yesterday summary');
-      setSummary(cached);
-      setIsLoading(false);
-      return;
-    }
-
-    // Layer 3: Use static fallback
-    const randomIndex = Math.floor(Math.random() * fallbackContent.yesterdaySummary.length);
-    const fallback = fallbackContent.yesterdaySummary[randomIndex];
-    console.log('[Fallback] Using static yesterday summary');
-    setSummary(fallback.content);
-    setIsLoading(false);
-    // Don't show error - we have content
-  };
-
   useEffect(() => {
-    fetchSummary();
-  }, [userData.userProfile.nickname]);
+    const currentUser = auth.currentUser;
 
-  // Remove error display - always show content
+    if (!currentUser) {
+      setIsLoading(false);
+      return;
+    }
+
+    // 計算昨日日期
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayDate = yesterday.toISOString().split('T')[0];
+
+    console.log('[YesterdaySummary] Subscribing to:', yesterdayDate);
+
+    // 使用 Firestore Real-time Listener 讀取預生成數據
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', currentUser.uid, 'dailySummaries', yesterdayDate),
+      async (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          // Enhanced field checking with priority: summary > text > content
+          const content = data.summary || data.text || data.content || '';
+          console.log('[YesterdaySummary] Firestore data fields:', Object.keys(data));
+          console.log('[YesterdaySummary] summary:', data.summary);
+          console.log('[YesterdaySummary] text:', data.text);
+          console.log('[YesterdaySummary] content:', data.content);
+          console.log('[YesterdaySummary] Final content value:', content);
+          setSummary(content);
+          // Cache to localStorage
+          if (content) localStorage.setItem('lastYesterdaySummary', content);
+          setIsLoading(false);
+        } else {
+          // Firestore 沒有資料，嘗試調用 Cloud Function 生成
+          console.log('[YesterdaySummary] No data in Firestore, calling Cloud Function...');
+
+          // 先檢查 localStorage
+          const cached = localStorage.getItem('lastYesterdaySummary');
+          if (cached) {
+            console.log('[YesterdaySummary] Using cached summary temporarily');
+            setSummary(cached);
+            setIsLoading(false);
+          } else {
+            setIsLoading(false);
+            setSummary('Goodi 正在為你準備昨日總結...');
+          }
+
+          // 調用 Cloud Function（異步）
+          if (!isGenerating) {
+            setIsGenerating(true);
+            try {
+              const result = await getYesterdaySummary();
+              // 後端返回 { success: true, summary: "..." }，Firebase 包裝後為 result.data
+              if (result.success && result.data?.summary) {
+                setSummary(result.data.summary);
+                localStorage.setItem('lastYesterdaySummary', result.data.summary);
+                console.log('[YesterdaySummary] Generated via Cloud Function:', result.data.summary);
+              } else {
+                // API 失敗，使用 fallback
+                const randomIndex = Math.floor(Math.random() * fallbackContent.yesterdaySummary.length);
+                setSummary(fallbackContent.yesterdaySummary[randomIndex].content);
+              }
+            } catch (err) {
+              console.error('[YesterdaySummary] Cloud Function error:', err);
+              const randomIndex = Math.floor(Math.random() * fallbackContent.yesterdaySummary.length);
+              setSummary(fallbackContent.yesterdaySummary[randomIndex].content);
+            } finally {
+              setIsGenerating(false);
+            }
+          }
+        }
+      },
+      (err) => {
+        console.error('[YesterdaySummary] Firestore error:', err);
+        // Fallback on error
+        const cached = localStorage.getItem('lastYesterdaySummary');
+        if (cached) {
+          setSummary(cached);
+        } else {
+          const randomIndex = Math.floor(Math.random() * fallbackContent.yesterdaySummary.length);
+          setSummary(fallbackContent.yesterdaySummary[randomIndex].content);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   return (
     <WidgetCard icon="https://api.iconify.design/twemoji/spiral-notepad.svg" title="昨日總結" className="bg-white/60">
@@ -291,6 +340,8 @@ const AiYesterdaySummary: React.FC = () => {
     </WidgetCard>
   );
 };
+
+
 
 
 

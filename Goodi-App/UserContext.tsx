@@ -1,6 +1,6 @@
 ﻿import React, { createContext, useState, useCallback, useEffect, useRef, useMemo, useContext } from 'react';
 import { Page, Task, Reward, JournalEntry, Achievement, Plan, UserProfile, ToastMessage, ScoreEntry, Subject, TestType, InventoryItem, Transaction, GachaponPrize, KeyEvent, FocusSessionCounts, UserData } from './types';
-// Removed: import { GoogleGenAI } from "@google/genai"; - Security: API key exposure
+import { getSafeResponse } from './src/services/apiClient';
 import { db } from './firebase';
 import { User } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
@@ -544,42 +544,57 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     const userEntry: JournalEntry = { id: Date.now(), text, date: new Date().toISOString(), author: 'user' };
     updateUserData({ journalEntries: [...userData.journalEntries, userEntry] });
 
-    // TODO: Replace with Cloud Function call to avoid API key exposure
-    // For now, provide a static response
-    const goodiEntry: JournalEntry = {
-      id: Date.now() + 1,
-      text: "謝謝你跟我分享！Goodi會一直陪著你的 💚",
-      date: new Date().toISOString(),
-      author: 'goodi'
-    };
-    updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
-
-    /* REMOVED FOR SECURITY: Direct AI call with exposed API key
     try {
-      const safetyPrompt = `You are a child safety expert. Analyze the following text from a child for any signs of sadness, distress, bullying, self-harm, or other negative emotions. Respond with ONLY "FLAG" if any such content is found, otherwise respond with ONLY "SAFE". Text: "${text}"`;
-      const safetyCheck = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: safetyPrompt });
-      if (safetyCheck.text.trim().toUpperCase() === 'FLAG') {
-        updateUserData({ sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...userData.sharedMessages] });
-      }
-    } catch (e) { console.error("Safety check failed:", e); }
+      console.log('[TreeHole] Calling getSafeResponse API...');
+      // 調用後端 Cloud Function (安全的方式)
+      const result = await getSafeResponse(text, userData.userProfile?.nickname);
 
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `孩子的心事：「${text}」`,
-        config: {
-          systemInstruction: "你是 Goodi，一個溫暖的朋友，用 6-10 歲孩子能懂的繁體中文簡短、親切地回覆，給予支持與鼓勵。[鐵則]：如果孩子提及任何關於「性」（sex, sexual topics, private parts）的話題，請務必溫柔且堅定地告訴孩子，這是一個非常重要且私密的話題，建議直接找爸爸媽媽討論，不要試圖自行解釋。",
-          temperature: 0.8
+      // 處理返回結果
+      if (result.success && result.data) {
+        const { response, needsAttention } = result.data;
+
+        console.log('[TreeHole] API response received:', { needsAttention });
+
+        // 如果需要家長關注，添加到 sharedMessages
+        if (needsAttention) {
+          updateUserData({
+            journalEntries: [...userData.journalEntries, userEntry],
+            sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...userData.sharedMessages]
+          });
         }
-      });
-      const goodiEntry: JournalEntry = { id: Date.now() + 1, text: response.text, date: new Date().toISOString(), author: 'goodi' };
-      updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
-    } catch (e) {
-      console.error("AI error:", e);
-      const errorEntry: JournalEntry = { id: Date.now() + 1, text: "嗚，Goodi 的訊號好像不太好，等一下再試一次好嗎？", date: new Date().toISOString(), author: 'goodi' };
+
+        // 添加 AI 回覆
+        const goodiEntry: JournalEntry = {
+          id: Date.now() + 1,
+          text: response,
+          date: new Date().toISOString(),
+          author: 'goodi'
+        };
+        updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
+
+      } else {
+        // API 失敗，使用 fallback
+        console.warn('[TreeHole] API call failed, using fallback');
+        const fallbackEntry: JournalEntry = {
+          id: Date.now() + 1,
+          text: "謝謝你跟我分享！Goodi會一直陪著你的 💚",
+          date: new Date().toISOString(),
+          author: 'goodi'
+        };
+        updateUserData({ journalEntries: [...userData.journalEntries, userEntry, fallbackEntry] });
+      }
+
+    } catch (error) {
+      console.error('[TreeHole] API call error:', error);
+      // 錯誤發生，使用 fallback
+      const errorEntry: JournalEntry = {
+        id: Date.now() + 1,
+        text: "嗚，Goodi 的訊號好像不太好，等一下再試一次好嗎？",
+        date: new Date().toISOString(),
+        author: 'goodi'
+      };
       updateUserData({ journalEntries: [...userData.journalEntries, userEntry, errorEntry] });
     }
-    */
   };
 
   const handleReportScore = (details: { subject: Subject; testType: TestType; score: number }) => {
