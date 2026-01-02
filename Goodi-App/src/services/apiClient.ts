@@ -436,9 +436,3 @@ export async function getSystemStatus(): Promise<ApiResponse<{
     return callFunction('getSystemStatus', {});
 }
 
-/**
- * ����C�餺�e (���v�W������ + �ʪ��N����)
- */
-export async function getDailyFacts(date?: string): Promise<ApiResponse<{ history: string; animalFact: string; date: string }>> {
-    return callFunction('getDailyFacts', { date });
-}

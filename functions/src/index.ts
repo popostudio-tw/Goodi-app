@@ -1105,7 +1105,7 @@ export const triggerYesterdaySummary = onCall(
 // Account Deletion - Apple App Store Compliance Requirement
 export { deleteUserAccount } from './deleteUserAccount';
 
-// === �t�Ϊ��A�ʱ� ===
+// === 系統狀態監控 ===
 export { getSystemStatus } from './getSystemStatus';
 
 
