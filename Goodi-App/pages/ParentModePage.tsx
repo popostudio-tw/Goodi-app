@@ -181,7 +181,7 @@ const AiTaskSuggestModal: React.FC<{
         };
 
         const result = await generateGeminiContent({
-          model: "gemini-2.0-flash",
+          model: "gemini-1.5-flash",
           prompt: `你是一位資深兒童教育專家。請為一位 ${userAge} 歲的孩子，推薦 5 個具體且適合他年齡的任務。任務必須能鼓勵自主性與責任感。任務類別只能是 '生活', '家務', 或 '學習'。請確保任務名稱獨特。請務必使用【繁體中文】回覆。任務圖示 icon 欄位必須從以下列表中選擇一個最符合的 URL: [${ICON_LIST.join(', ')}]。`,
           responseMimeType: "application/json",
           schema: schema,
@@ -384,7 +384,7 @@ const AiGoalTaskGenerator: React.FC<{
       };
 
       const result = await generateGeminiContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-1.5-flash",
         prompt: `你是一位資深育兒顧問與兒童發展專家。請為一位 ${userAge} 歲的孩子，圍繞「${goal}」這個目標，設計 5 個具體、可行、且能引發孩子興趣的任務。請務必使用【繁體中文】編寫。任務類別必須是 '生活', '家務', 或 '學習'。圖示 icon 欄位必須從以下列表中選擇最合理的 URL: [${ICON_LIST.join(', ')}]。`,
         responseMimeType: "application/json",
         schema: schema,
