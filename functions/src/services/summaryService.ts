@@ -99,7 +99,7 @@ ${encouragementTone}
             source: 'summary',
             userId,
             prompt,
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
             config: {
                 temperature: 0.9, // 提高創意度
             },
@@ -180,7 +180,7 @@ export async function generateWeeklyReportForUser(
         source: 'weekly',
         userId,
         prompt,
-        model: "gemini-1.5-flash"
+        model: "gemini-2.0-flash"
     });
 
     if (shouldUseFallback(result)) {

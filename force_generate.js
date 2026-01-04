@@ -20,7 +20,7 @@ async function generateAndStoreDailyContent(dateStr) {
     const day = dateObj.getDate();
 
     const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `
 Generate two pieces of fun and educational content for children aged 5-12 for the date ${month}/${day}.
