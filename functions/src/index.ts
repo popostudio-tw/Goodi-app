@@ -1,5 +1,6 @@
 ﻿import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { callGemini, shouldUseFallback } from "./geminiWrapper";
+import { generateRichDailySummary } from "./scheduledDailySummariesV2";
 
 import { initializeApp as initAdmin } from "firebase-admin/app";
 initAdmin();
@@ -62,7 +63,7 @@ export const generateGeminiContent = onCall(
         source: 'task',
         userId: auth.uid,
         prompt,
-        model: model || "gemini-1.5-flash",
+        model: model || "gemini-2.0-flash",
         config: requestConfig
       });
 
@@ -91,20 +92,50 @@ export const generateGeminiContent = onCall(
 async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInHistory: string; animalTrivia: string }> {
   const { getFirestore } = await import("firebase-admin/firestore");
   const db = getFirestore();
+  const docRef = db.collection('dailyContent').doc(dateStr);
 
+  // 1. 嘗試原子化地「搶佔」生成鎖
+  try {
+    // create() 當文檔已存在時會失敗，確保只有一個併發請求能成功
+    await docRef.create({
+      status: 'generating',
+      generatedAt: new Date().toISOString()
+    });
+    console.log(`[Claim] Successfully claimed generation lock for ${dateStr}`);
+  } catch (error: any) {
+    // 2. 如果已存在 (ALREADY_EXISTS)，檢查狀態
+    // Firebase Admin SDK 的 error code 6 對應 ALREADY_EXISTS
+    if (error.code === 6 || error.message?.includes('ALREADY_EXISTS')) {
+      const existingDoc = await docRef.get();
+      const data = existingDoc.data();
+
+      if (data?.status === 'completed') {
+        console.log(`[Skip] Content for ${dateStr} already exists.`);
+        return data as { todayInHistory: string; animalTrivia: string };
+      }
+
+      if (data?.status === 'generating') {
+        // 檢查是否為過期鎖 (超過 2 分鐘)
+        const generatedAt = data.generatedAt ? new Date(data.generatedAt).getTime() : 0;
+        if (Date.now() - generatedAt < 120000) {
+          console.log(`[Wait] Generation for ${dateStr} is in progress...`);
+          throw new Error('GENERATION_IN_PROGRESS');
+        }
+        console.log(`[Resume] Stale lock detected for ${dateStr}, retrying generation...`);
+        // 繼續執行生成邏輯 (接管鎖)
+      }
+    } else {
+      throw error;
+    }
+  }
+
+  // 3. 成功搶到鎖 (或接管過期鎖)，開始執行 AI 生成 (在 Transaction 之外！)
   try {
     const dateObj = new Date(dateStr);
     const month = dateObj.getMonth() + 1;
     const day = dateObj.getDate();
     const year = dateObj.getFullYear();
     const seed = year * 10000 + month * 100 + day;
-
-    // --- Story B: Existence Check ---
-    const existingDoc = await db.collection('dailyContent').doc(dateStr).get();
-    if (existingDoc.exists && existingDoc.data()?.status === 'completed') {
-      console.log(`[Skip] Content for ${dateStr} already exists.`);
-      return existingDoc.data() as { todayInHistory: string; animalTrivia: string };
-    }
 
     // Fetch recent topics to avoid repetition
     let recentAnimals: string[] = [];
@@ -125,31 +156,9 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
       }
     });
 
-    // Use a transaction or strict check to prevent double AI calls
-    return await db.runTransaction(async (transaction) => {
-      const docRef = db.collection('dailyContent').doc(dateStr);
-      const freshDoc = await transaction.get(docRef);
-      const freshData = freshDoc.data();
+    console.log(`Starting AI generation for ${dateStr} (Lock Owner)`);
 
-      if (freshDoc.exists && freshData?.status === 'completed') {
-        return freshData as { todayInHistory: string; animalTrivia: string };
-      }
-
-      // Concurrency check
-      if (freshDoc.exists && freshData?.status === 'generating') {
-        const generatedAt = freshData.generatedAt ? new Date(freshData.generatedAt).getTime() : 0;
-        if (Date.now() - generatedAt < 60000) { // 延長至 1 分鐘
-          console.log(`Generation for ${dateStr} is already in progress...`);
-          throw new Error('GENERATION_IN_PROGRESS');
-        }
-      }
-
-      transaction.set(docRef, { status: 'generating', generatedAt: new Date().toISOString() }, { merge: true });
-
-      // Story C: AI Retry & Backoff logic
-      console.log(`Starting AI generation for ${dateStr} with retry logic`);
-
-      const combinedPrompt = `
+    const combinedPrompt = `
 你是 Goodi，一隻可愛的小恐龍 AI 夥伴，專門為 5-12 歲的小朋友提供有趣的知識。
 請為 ${month}月${day}日 生成兩段內容：
 
@@ -182,7 +191,7 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
             source: 'daily',
             userId: 'system',
             prompt: combinedPrompt,
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
             config: {
               responseMimeType: "application/json",
               responseSchema: {
@@ -229,9 +238,9 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
         status: 'completed'
       };
 
-      transaction.set(docRef, result);
+      // 4. 寫入結果
+      await docRef.set(result);
       return result;
-    });
 
   } catch (error: any) {
     if (error.message === 'GENERATION_IN_PROGRESS') throw error;
@@ -243,7 +252,7 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
       generatedAt: new Date().toISOString(),
       status: 'completed'
     };
-    await db.collection('dailyContent').doc(dateStr).set(fallback);
+    await docRef.set(fallback);
     return fallback;
   }
 }
@@ -427,72 +436,11 @@ async function generateYesterdaySummaryForUser(
   userId: string,
   userData: any,
   yesterdayStr: string
-): Promise<string> {
-  const nickname = userData.userProfile?.nickname || '小朋友';
-
-  // 計算昨天的範圍 (毫秒)
-  const startTime = new Date(yesterdayStr).getTime();
-  const endTime = startTime + 24 * 60 * 60 * 1000;
-
-  const yesterdayTasks = (userData.transactions || []).filter((t: any) =>
-    t.timestamp >= startTime && t.timestamp < endTime && t.description?.startsWith('完成任務')
-  );
-
-  const yesterdayJournals = (userData.journalEntries || []).filter((j: any) =>
-    j.author === 'user' && new Date(j.date).getTime() >= startTime && new Date(j.date).getTime() < endTime
-  );
-
-  // 構建 prompt（即使沒有活動也調用 AI）
-  const hasActivity = yesterdayTasks.length > 0 || yesterdayJournals.length > 0;
-
-  const prompt = hasActivity ? `
-你是一位溫暖、耐心的 AI 恐龍 Goodi，是孩子最好的朋友。
-請根據「${nickname}」昨天的表現，寫一段 80-120 字的溫暖鼓勵與總結（繁體中文）。
-
-昨天的小數據：
-- 完成任務：${yesterdayTasks.length} 個
-- 提到的心事：${yesterdayJournals.map((j: any) => j.text).join('; ') || '無'}
-
-要求：
-1. 語氣像好朋友在聊天，溫柔且充滿正能量
-2. 不要使用條列式，像一段溫暖的話語
-3. 具體提到孩子完成任務的努力
-4. 如果有提過心事，給予簡短的暖心回應
-5. 最後給一句充滿希望的結尾，鼓勵今天也開開心心！
-` : `
-你是一位溫暖、耐心的 AI 恐龍 Goodi，是孩子最好的朋友。
-「${nickname}」昨天沒有記錄任何任務或心情，可能是休息日或忘記記錄了。
-
-請寫一段 80-120 字的溫暖鼓勵（繁體中文），內容要：
-1. 語氣像好朋友在聊天，溫柔且充滿正能量
-2. 不要責怪或質疑，要理解和包容
-3. 提到休息的重要性，或鼓勵今天可以重新開始
-4. 用溫暖的語氣表達 Goodi 一直都在陪伴
-5. 最後給一句充滿希望的結尾，鼓勵今天也開開心心！
-6. 不要提到「記錄」或「忘記」，要自然而溫暖
-`;
-
-  try {
-    // 使用 wrapper 呼叫 AI
-    const result = await callGemini({
-      source: 'summary',
-      userId,
-      prompt,
-      model: "gemini-1.5-flash",
-      config: {
-        temperature: 0.8,
-      },
-    });
-
-    if (shouldUseFallback(result)) {
-      return "昨天你真的很棒喔！Goodi 有看到你的努力，今天也要一起加油！🦕";
-    }
-
-    return result.text || "昨天你真的很棒喔！Goodi 有看到你的努力，今天也要一起加油！🦕";
-  } catch (error) {
-    console.error(`Gemini summary generation error for ${userId}:`, error);
-    return "昨天你真的很棒喔！Goodi 永遠支持你！🦖";
-  }
+): Promise<any> {
+  const { getFirestore } = await import("firebase-admin/firestore");
+  const db = getFirestore();
+  // 使用共用的 Rich Summary 生成邏輯，確保手動觸發與排程生成的資料結構一致
+  return await generateRichDailySummary(db, userId, yesterdayStr, userData);
 }
 
 // Cloud Function: generateYesterdaySummary
@@ -545,23 +493,13 @@ export const generateYesterdaySummary = onCall(
 
       const userData = userDoc.data();
 
-      // 生成總結
+      // 生成總結 (generateRichDailySummary 內部已經會執行 Firestore set)
       const summary = await generateYesterdaySummaryForUser(userId, userData, yesterdayStr);
-
-      // 儲存到 Firestore
-      await cacheRef.set({
-        summary: summary,
-        date: yesterdayStr,
-        generatedAt: new Date().toISOString(),
-      });
 
       console.log(`Generated and cached summary for user ${userId}`);
 
-      return {
-        summary: summary,
-        date: yesterdayStr,
-        generatedAt: new Date().toISOString(),
-      };
+      // 直接返回完整的 Rich Object
+      return summary;
 
     } catch (error: any) {
       console.error(`Failed to generate summary for user ${userId}:`, error);
@@ -604,7 +542,7 @@ export const generateGrowthReport = onCall(
         source: 'growth',
         userId: auth.uid,
         prompt,
-        model: "gemini-1.5-flash"
+        model: "gemini-2.0-flash"
       });
 
       if (shouldUseFallback(result)) {
@@ -681,7 +619,7 @@ Child's message: "${userMessage}"`;
         source: 'treehouse',
         userId: auth.uid,
         prompt: safetyPrompt,
-        model: "gemini-1.5-flash"
+        model: "gemini-2.0-flash"
       });
 
       const safetyResult = (safetyCheckResult.text || "SAFE").trim().toUpperCase();
@@ -709,7 +647,7 @@ Focus on being a good listener and a best friend.`;
         source: 'treehouse',
         userId: auth.uid,
         prompt: conversationPrompt,
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         config: {
           temperature: 0.8,
         },
@@ -810,7 +748,7 @@ async function generateWeeklyReportForUser(
     source: 'weekly',
     userId,
     prompt,
-    model: "gemini-1.5-flash"
+    model: "gemini-2.0-flash"
   });
 
   if (shouldUseFallback(result)) {
@@ -826,6 +764,7 @@ export const scheduledWeeklyReports = onSchedule(
     schedule: "0 2 * * 6", // 每週六凌晨 2:00 (錯開每日內容生成)
     timeZone: "Asia/Taipei",
     secrets: ["GEMINI_API_KEY"],
+    timeoutSeconds: 1800, // 增加超時時間至 30 分鐘，允許較慢的批次處理
   },
   async () => {
     const { getFirestore } = await import("firebase-admin/firestore");
@@ -888,8 +827,8 @@ export const scheduledWeeklyReports = onSchedule(
           console.error(`Failed to generate report for user ${userId}:`, userError);
         }
 
-        // 避免 API 速率限制，每個用戶間隔 1 秒
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // 避免 API 速率限制，每個用戶間隔 6 秒 (符合 10 RPM 限制)
+        await new Promise(resolve => setTimeout(resolve, 6000));
       }
 
       console.log(`Weekly reports completed. Success: ${successCount}, Errors: ${errorCount}`);
@@ -999,6 +938,7 @@ export const scheduledYesterdaySummaries = onSchedule(
     schedule: "30 1 * * *",
     timeZone: "Asia/Taipei",
     secrets: ["GEMINI_API_KEY"],
+    timeoutSeconds: 1800, // 增加超時時間至 30 分鐘，允許較慢的批次處理
   },
   async () => {
     const { getFirestore } = await import("firebase-admin/firestore");
@@ -1043,8 +983,8 @@ export const scheduledYesterdaySummaries = onSchedule(
             });
 
           count++;
-          // 避免速率限制
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // 避免速率限制，每個用戶間隔 6 秒 (符合 10 RPM 限制)
+          await new Promise(resolve => setTimeout(resolve, 6000));
         } catch (err) {
           console.error(`Failed summary for user ${userId}:`, err);
         }
@@ -1086,13 +1026,7 @@ export const triggerYesterdaySummary = onCall(
 
       const summary = await generateYesterdaySummaryForUser(userId, userDoc.data(), yesterdayStr);
 
-      await db.collection('users').doc(userId)
-        .collection('dailySummaries').doc(yesterdayStr)
-        .set({
-          summary: summary,
-          date: yesterdayStr,
-          generatedAt: new Date().toISOString(),
-        });
+      // generateRichDailySummary 已經儲存了資料，這裡不需要再次 set
 
       return { success: true, summary };
     } catch (error: any) {
