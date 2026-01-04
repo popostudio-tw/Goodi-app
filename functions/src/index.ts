@@ -1,5 +1,6 @@
 ﻿import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { callGemini, shouldUseFallback } from "./geminiWrapper";
+import { generateRichDailySummary } from "./scheduledDailySummariesV2";
 
 import { initializeApp as initAdmin } from "firebase-admin/app";
 initAdmin();
@@ -435,72 +436,11 @@ async function generateYesterdaySummaryForUser(
   userId: string,
   userData: any,
   yesterdayStr: string
-): Promise<string> {
-  const nickname = userData.userProfile?.nickname || '小朋友';
-
-  // 計算昨天的範圍 (毫秒)
-  const startTime = new Date(yesterdayStr).getTime();
-  const endTime = startTime + 24 * 60 * 60 * 1000;
-
-  const yesterdayTasks = (userData.transactions || []).filter((t: any) =>
-    t.timestamp >= startTime && t.timestamp < endTime && t.description?.startsWith('完成任務')
-  );
-
-  const yesterdayJournals = (userData.journalEntries || []).filter((j: any) =>
-    j.author === 'user' && new Date(j.date).getTime() >= startTime && new Date(j.date).getTime() < endTime
-  );
-
-  // 構建 prompt（即使沒有活動也調用 AI）
-  const hasActivity = yesterdayTasks.length > 0 || yesterdayJournals.length > 0;
-
-  const prompt = hasActivity ? `
-你是一位溫暖、耐心的 AI 恐龍 Goodi，是孩子最好的朋友。
-請根據「${nickname}」昨天的表現，寫一段 80-120 字的溫暖鼓勵與總結（繁體中文）。
-
-昨天的小數據：
-- 完成任務：${yesterdayTasks.length} 個
-- 提到的心事：${yesterdayJournals.map((j: any) => j.text).join('; ') || '無'}
-
-要求：
-1. 語氣像好朋友在聊天，溫柔且充滿正能量
-2. 不要使用條列式，像一段溫暖的話語
-3. 具體提到孩子完成任務的努力
-4. 如果有提過心事，給予簡短的暖心回應
-5. 最後給一句充滿希望的結尾，鼓勵今天也開開心心！
-` : `
-你是一位溫暖、耐心的 AI 恐龍 Goodi，是孩子最好的朋友。
-「${nickname}」昨天沒有記錄任何任務或心情，可能是休息日或忘記記錄了。
-
-請寫一段 80-120 字的溫暖鼓勵（繁體中文），內容要：
-1. 語氣像好朋友在聊天，溫柔且充滿正能量
-2. 不要責怪或質疑，要理解和包容
-3. 提到休息的重要性，或鼓勵今天可以重新開始
-4. 用溫暖的語氣表達 Goodi 一直都在陪伴
-5. 最後給一句充滿希望的結尾，鼓勵今天也開開心心！
-6. 不要提到「記錄」或「忘記」，要自然而溫暖
-`;
-
-  try {
-    // 使用 wrapper 呼叫 AI
-    const result = await callGemini({
-      source: 'summary',
-      userId,
-      prompt,
-      model: "gemini-2.0-flash",
-      config: {
-        temperature: 0.8,
-      },
-    });
-
-    if (shouldUseFallback(result)) {
-      return "昨天你真的很棒喔！Goodi 有看到你的努力，今天也要一起加油！🦕";
-    }
-
-    return result.text || "昨天你真的很棒喔！Goodi 有看到你的努力，今天也要一起加油！🦕";
-  } catch (error) {
-    console.error(`Gemini summary generation error for ${userId}:`, error);
-    return "昨天你真的很棒喔！Goodi 永遠支持你！🦖";
-  }
+): Promise<any> {
+  const { getFirestore } = await import("firebase-admin/firestore");
+  const db = getFirestore();
+  // 使用共用的 Rich Summary 生成邏輯，確保手動觸發與排程生成的資料結構一致
+  return await generateRichDailySummary(db, userId, yesterdayStr, userData);
 }
 
 // Cloud Function: generateYesterdaySummary
@@ -553,23 +493,13 @@ export const generateYesterdaySummary = onCall(
 
       const userData = userDoc.data();
 
-      // 生成總結
+      // 生成總結 (generateRichDailySummary 內部已經會執行 Firestore set)
       const summary = await generateYesterdaySummaryForUser(userId, userData, yesterdayStr);
-
-      // 儲存到 Firestore
-      await cacheRef.set({
-        summary: summary,
-        date: yesterdayStr,
-        generatedAt: new Date().toISOString(),
-      });
 
       console.log(`Generated and cached summary for user ${userId}`);
 
-      return {
-        summary: summary,
-        date: yesterdayStr,
-        generatedAt: new Date().toISOString(),
-      };
+      // 直接返回完整的 Rich Object
+      return summary;
 
     } catch (error: any) {
       console.error(`Failed to generate summary for user ${userId}:`, error);
@@ -1096,13 +1026,7 @@ export const triggerYesterdaySummary = onCall(
 
       const summary = await generateYesterdaySummaryForUser(userId, userDoc.data(), yesterdayStr);
 
-      await db.collection('users').doc(userId)
-        .collection('dailySummaries').doc(yesterdayStr)
-        .set({
-          summary: summary,
-          date: yesterdayStr,
-          generatedAt: new Date().toISOString(),
-        });
+      // generateRichDailySummary 已經儲存了資料，這裡不需要再次 set
 
       return { success: true, summary };
     } catch (error: any) {
