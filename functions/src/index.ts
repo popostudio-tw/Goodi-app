@@ -826,6 +826,7 @@ export const scheduledWeeklyReports = onSchedule(
     schedule: "0 2 * * 6", // 每週六凌晨 2:00 (錯開每日內容生成)
     timeZone: "Asia/Taipei",
     secrets: ["GEMINI_API_KEY"],
+    timeoutSeconds: 1800, // 增加超時時間至 30 分鐘，允許較慢的批次處理
   },
   async () => {
     const { getFirestore } = await import("firebase-admin/firestore");
@@ -888,8 +889,8 @@ export const scheduledWeeklyReports = onSchedule(
           console.error(`Failed to generate report for user ${userId}:`, userError);
         }
 
-        // 避免 API 速率限制，每個用戶間隔 1 秒
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // 避免 API 速率限制，每個用戶間隔 6 秒 (符合 10 RPM 限制)
+        await new Promise(resolve => setTimeout(resolve, 6000));
       }
 
       console.log(`Weekly reports completed. Success: ${successCount}, Errors: ${errorCount}`);
@@ -999,6 +1000,7 @@ export const scheduledYesterdaySummaries = onSchedule(
     schedule: "30 1 * * *",
     timeZone: "Asia/Taipei",
     secrets: ["GEMINI_API_KEY"],
+    timeoutSeconds: 1800, // 增加超時時間至 30 分鐘，允許較慢的批次處理
   },
   async () => {
     const { getFirestore } = await import("firebase-admin/firestore");
@@ -1043,8 +1045,8 @@ export const scheduledYesterdaySummaries = onSchedule(
             });
 
           count++;
-          // 避免速率限制
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // 避免速率限制，每個用戶間隔 6 秒 (符合 10 RPM 限制)
+          await new Promise(resolve => setTimeout(resolve, 6000));
         } catch (err) {
           console.error(`Failed summary for user ${userId}:`, err);
         }
