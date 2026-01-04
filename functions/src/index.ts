@@ -91,20 +91,50 @@ export const generateGeminiContent = onCall(
 async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInHistory: string; animalTrivia: string }> {
   const { getFirestore } = await import("firebase-admin/firestore");
   const db = getFirestore();
+  const docRef = db.collection('dailyContent').doc(dateStr);
 
+  // 1. 嘗試原子化地「搶佔」生成鎖
+  try {
+    // create() 當文檔已存在時會失敗，確保只有一個併發請求能成功
+    await docRef.create({
+      status: 'generating',
+      generatedAt: new Date().toISOString()
+    });
+    console.log(`[Claim] Successfully claimed generation lock for ${dateStr}`);
+  } catch (error: any) {
+    // 2. 如果已存在 (ALREADY_EXISTS)，檢查狀態
+    // Firebase Admin SDK 的 error code 6 對應 ALREADY_EXISTS
+    if (error.code === 6 || error.message?.includes('ALREADY_EXISTS')) {
+      const existingDoc = await docRef.get();
+      const data = existingDoc.data();
+
+      if (data?.status === 'completed') {
+        console.log(`[Skip] Content for ${dateStr} already exists.`);
+        return data as { todayInHistory: string; animalTrivia: string };
+      }
+
+      if (data?.status === 'generating') {
+        // 檢查是否為過期鎖 (超過 2 分鐘)
+        const generatedAt = data.generatedAt ? new Date(data.generatedAt).getTime() : 0;
+        if (Date.now() - generatedAt < 120000) {
+          console.log(`[Wait] Generation for ${dateStr} is in progress...`);
+          throw new Error('GENERATION_IN_PROGRESS');
+        }
+        console.log(`[Resume] Stale lock detected for ${dateStr}, retrying generation...`);
+        // 繼續執行生成邏輯 (接管鎖)
+      }
+    } else {
+      throw error;
+    }
+  }
+
+  // 3. 成功搶到鎖 (或接管過期鎖)，開始執行 AI 生成 (在 Transaction 之外！)
   try {
     const dateObj = new Date(dateStr);
     const month = dateObj.getMonth() + 1;
     const day = dateObj.getDate();
     const year = dateObj.getFullYear();
     const seed = year * 10000 + month * 100 + day;
-
-    // --- Story B: Existence Check ---
-    const existingDoc = await db.collection('dailyContent').doc(dateStr).get();
-    if (existingDoc.exists && existingDoc.data()?.status === 'completed') {
-      console.log(`[Skip] Content for ${dateStr} already exists.`);
-      return existingDoc.data() as { todayInHistory: string; animalTrivia: string };
-    }
 
     // Fetch recent topics to avoid repetition
     let recentAnimals: string[] = [];
@@ -125,31 +155,9 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
       }
     });
 
-    // Use a transaction or strict check to prevent double AI calls
-    return await db.runTransaction(async (transaction) => {
-      const docRef = db.collection('dailyContent').doc(dateStr);
-      const freshDoc = await transaction.get(docRef);
-      const freshData = freshDoc.data();
+    console.log(`Starting AI generation for ${dateStr} (Lock Owner)`);
 
-      if (freshDoc.exists && freshData?.status === 'completed') {
-        return freshData as { todayInHistory: string; animalTrivia: string };
-      }
-
-      // Concurrency check
-      if (freshDoc.exists && freshData?.status === 'generating') {
-        const generatedAt = freshData.generatedAt ? new Date(freshData.generatedAt).getTime() : 0;
-        if (Date.now() - generatedAt < 60000) { // 延長至 1 分鐘
-          console.log(`Generation for ${dateStr} is already in progress...`);
-          throw new Error('GENERATION_IN_PROGRESS');
-        }
-      }
-
-      transaction.set(docRef, { status: 'generating', generatedAt: new Date().toISOString() }, { merge: true });
-
-      // Story C: AI Retry & Backoff logic
-      console.log(`Starting AI generation for ${dateStr} with retry logic`);
-
-      const combinedPrompt = `
+    const combinedPrompt = `
 你是 Goodi，一隻可愛的小恐龍 AI 夥伴，專門為 5-12 歲的小朋友提供有趣的知識。
 請為 ${month}月${day}日 生成兩段內容：
 
@@ -229,9 +237,9 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
         status: 'completed'
       };
 
-      transaction.set(docRef, result);
+      // 4. 寫入結果
+      await docRef.set(result);
       return result;
-    });
 
   } catch (error: any) {
     if (error.message === 'GENERATION_IN_PROGRESS') throw error;
@@ -243,7 +251,7 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
       generatedAt: new Date().toISOString(),
       status: 'completed'
     };
-    await db.collection('dailyContent').doc(dateStr).set(fallback);
+    await docRef.set(fallback);
     return fallback;
   }
 }
