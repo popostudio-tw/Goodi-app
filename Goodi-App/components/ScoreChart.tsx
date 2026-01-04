@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { ScoreEntry, Subject } from '../types';
 
 interface ScoreChartProps {
@@ -18,7 +18,8 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
         return <div className="text-center p-8 text-gray-500">成績紀錄少於兩筆，尚無法繪製圖表。</div>;
     }
 
-    const handleExportToCSV = () => {
+    // Optimize: Prevent function recreation on re-renders, though React.memo handles the main prevention.
+    const handleExportToCSV = useCallback(() => {
         if (scores.length === 0) return;
         
         const headers = ["id", "date", "subject", "testType", "score"];
@@ -35,7 +36,7 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    };
+    }, [scores]);
 
     const PADDING = 40;
     const WIDTH = 600;
@@ -124,4 +125,5 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+// Optimize: Wrap in React.memo to prevent expensive SVG re-renders when parent state changes but scores remain the same.
+export default React.memo(ScoreChart);
