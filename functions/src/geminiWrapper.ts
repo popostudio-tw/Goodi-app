@@ -156,7 +156,7 @@ function getTodayDateStr(): string {
 
 // === 核心函數：集中式 Gemini API 呼叫（含 Retry、Circuit Breaker、Concurrency Control）===
 export async function callGemini(params: GeminiCallParams): Promise<GeminiCallResult> {
-    const { source, userId, prompt, model = "gemini-1.5-flash", config } = params;
+    const { source, userId, prompt, model = "gemini-2.0-flash", config } = params;
     const db = getFirestore();
     const today = getTodayDateStr();
     const usageDocRef = db.collection('apiUsage').doc(`global_${today}`);
