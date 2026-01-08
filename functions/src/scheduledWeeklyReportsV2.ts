@@ -139,7 +139,7 @@ export const scheduledWeeklyReportsV2 = onSchedule(
                         source: 'weekly',
                         userId,
                         prompt,
-                        model: 'gemini-1.5-flash',
+                        model: 'gemini-2.0-flash',
                     });
 
                     let reportData: any;

@@ -62,7 +62,7 @@ export const generateGeminiContent = onCall(
         source: 'task',
         userId: auth.uid,
         prompt,
-        model: model || "gemini-1.5-flash",
+        model: model || "gemini-2.0-flash",
         config: requestConfig
       });
 
@@ -182,7 +182,7 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
             source: 'daily',
             userId: 'system',
             prompt: combinedPrompt,
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
             config: {
               responseMimeType: "application/json",
               responseSchema: {
@@ -478,7 +478,7 @@ async function generateYesterdaySummaryForUser(
       source: 'summary',
       userId,
       prompt,
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       config: {
         temperature: 0.8,
       },
@@ -604,7 +604,7 @@ export const generateGrowthReport = onCall(
         source: 'growth',
         userId: auth.uid,
         prompt,
-        model: "gemini-1.5-flash"
+        model: "gemini-2.0-flash"
       });
 
       if (shouldUseFallback(result)) {
@@ -681,7 +681,7 @@ Child's message: "${userMessage}"`;
         source: 'treehouse',
         userId: auth.uid,
         prompt: safetyPrompt,
-        model: "gemini-1.5-flash"
+        model: "gemini-2.0-flash"
       });
 
       const safetyResult = (safetyCheckResult.text || "SAFE").trim().toUpperCase();
@@ -709,7 +709,7 @@ Focus on being a good listener and a best friend.`;
         source: 'treehouse',
         userId: auth.uid,
         prompt: conversationPrompt,
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         config: {
           temperature: 0.8,
         },
@@ -810,7 +810,7 @@ async function generateWeeklyReportForUser(
     source: 'weekly',
     userId,
     prompt,
-    model: "gemini-1.5-flash"
+    model: "gemini-2.0-flash"
   });
 
   if (shouldUseFallback(result)) {

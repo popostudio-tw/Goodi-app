@@ -67,7 +67,7 @@ export const generateSafeResponseV2 = onCall(
                 source: 'treehouse',
                 userId,
                 prompt: safetyPrompt,
-                model: 'gemini-1.5-flash', // 使用較快的模型進行初步檢查
+            model: 'gemini-2.0-flash', // 使用較快的模型進行初步檢查
             });
 
             // 解析安全檢查結果
@@ -102,7 +102,7 @@ export const generateSafeResponseV2 = onCall(
                 source: 'treehouse',
                 userId,
                 prompt: responsePrompt,
-                model: 'gemini-1.5-flash',
+                model: 'gemini-2.0-flash',
             });
 
             if (!responseResult.success || !responseResult.text) {
