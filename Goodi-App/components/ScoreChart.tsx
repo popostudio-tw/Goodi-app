@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { ScoreEntry, Subject } from '../types';
 
 interface ScoreChartProps {
@@ -13,7 +13,7 @@ const COLORS: Record<Subject, string> = {
     '自然': '#84cc16', // lime-500
 };
 
-const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
+const ScoreChart = memo(({ scores }: ScoreChartProps) => {
     if (scores.length < 2) {
         return <div className="text-center p-8 text-gray-500">成績紀錄少於兩筆，尚無法繪製圖表。</div>;
     }
@@ -122,6 +122,6 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
             </div>
         </div>
     );
-};
+});
 
 export default ScoreChart;
