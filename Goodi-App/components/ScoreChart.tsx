@@ -13,6 +13,11 @@ const COLORS: Record<Subject, string> = {
     '自然': '#84cc16', // lime-500
 };
 
+/**
+ * ScoreChart component
+ * Optimized with React.memo to prevent unnecessary re-renders on parent updates.
+ * This is effective because scoreHistory reference in UserContext is stable unless scores change.
+ */
 const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     if (scores.length < 2) {
         return <div className="text-center p-8 text-gray-500">成績紀錄少於兩筆，尚無法繪製圖表。</div>;
@@ -75,6 +80,7 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
 
     return (
         <div>
+            {/* Optimized with React.memo to prevent unnecessary re-renders when parent updates but scores haven't changed */}
             <svg viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} className="w-full h-auto">
                 {/* Y-axis grid lines and labels */}
                 {[0, 20, 40, 60, 80, 100].map(score => (
@@ -124,4 +130,5 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+// Memoize the component to prevent re-renders when parent state changes but scores remain the same
+export default React.memo(ScoreChart);
