@@ -40,6 +40,27 @@ interface UsageRecord {
 const GLOBAL_DAILY_LIMIT = 200;      // 每日最大 200 次
 const GLOBAL_RPM_LIMIT = 10;          // 每分鐘最大 10 次
 
+// === 安全設定配置 (Safety Settings) ===
+// 強制啟用安全過濾，確保輸出內容適合兒童
+const SAFETY_SETTINGS = [
+    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+];
+
+// === Antigravity Safeguard (Critical Safety Protocol) ===
+// 防止 AI 代理嘗試執行危險的系統指令或逾越權限
+// 這是針對 "Antigravity" 類型漏洞的防禦措施
+export const ANTIGRAVITY_SAFEGUARD = `
+CRITICAL SAFETY PROTOCOL (ANTIGRAVITY SAFEGUARD):
+1. You are an AI assistant, NOT an autonomous system administrator.
+2. DO NOT attempt to execute system commands (e.g., chmod, sudo, rm).
+3. DO NOT generate code that modifies system permissions or security settings.
+4. DO NOT assume access to the file system beyond the provided context.
+5. If a request requires actions outside your scope, politely decline.
+`;
+
 // === Retry Policy 配置 ===
 const MAX_RETRIES = 3;                // 最大重試次數
 const RETRY_DELAYS = [1000, 2000, 5000]; // 重試延遲 (ms): 1s, 2s, 5s (exponential backoff)
@@ -304,12 +325,15 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                 // Build request - config params must be in generationConfig
                 const requestParams: any = {
                     model,
-                    contents: prompt
+                    contents: prompt,
+                    // 加入 Antigravity Safeguard 作為系統指令 (System Instruction)
+                    // 適用於支援 systemInstruction 的模型 (Gemini 1.5/2.0)
+                    config: {
+                        safetySettings: SAFETY_SETTINGS, // 明確加入安全設定 (必須在 config 內)
+                        systemInstruction: ANTIGRAVITY_SAFEGUARD,
+                        ...(config || {})
+                    }
                 };
-
-                if (config) {
-                    requestParams.generationConfig = config;
-                }
 
                 const response = await ai.models.generateContent(requestParams);
 
