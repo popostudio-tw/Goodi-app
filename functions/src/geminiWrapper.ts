@@ -40,6 +40,15 @@ interface UsageRecord {
 const GLOBAL_DAILY_LIMIT = 200;      // 每日最大 200 次
 const GLOBAL_RPM_LIMIT = 10;          // 每分鐘最大 10 次
 
+// === 安全設定配置 (Safety Settings) ===
+// 強制啟用安全過濾，確保輸出內容適合兒童
+const SAFETY_SETTINGS = [
+    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+];
+
 // === Retry Policy 配置 ===
 const MAX_RETRIES = 3;                // 最大重試次數
 const RETRY_DELAYS = [1000, 2000, 5000]; // 重試延遲 (ms): 1s, 2s, 5s (exponential backoff)
@@ -304,7 +313,8 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                 // Build request - config params must be in generationConfig
                 const requestParams: any = {
                     model,
-                    contents: prompt
+                    contents: prompt,
+                    safetySettings: SAFETY_SETTINGS, // 明確加入安全設定
                 };
 
                 if (config) {
