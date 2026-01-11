@@ -2,6 +2,7 @@
 import { Page, Task, Reward, JournalEntry, Achievement, Plan, UserProfile, ToastMessage, ScoreEntry, Subject, TestType, InventoryItem, Transaction, GachaponPrize, KeyEvent, FocusSessionCounts, UserData } from './types';
 import { getSafeResponse } from './src/services/apiClient';
 import { db } from './firebase';
+import { useUI } from './UIContext';
 import { User } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
@@ -120,7 +121,6 @@ const removeUndefined = (obj: any): any => {
 // --- CONTEXT DEFINITION ---
 interface UserDataContextType {
   userData: Omit<UserData, 'lastLoginDate'>;
-  isPointsAnimating: boolean;
   updateUserData: (updates: Partial<Omit<UserData, 'lastLoginDate'>>) => void;
   addToast: (message: string, type?: 'success' | 'celebrate') => void;
   gainPoints: (amount: number) => void;
@@ -197,7 +197,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     return initialUserData;
   });
 
-  const [isPointsAnimating, setIsPointsAnimating] = useState(false);
+  const { triggerPointsAnimation } = useUI();
 
   // Removed: Direct GoogleGenAI usage to prevent API key exposure
   // TODO: Migrate WhisperTree AI功能to Cloud Function
@@ -324,9 +324,8 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
 
   const gainPoints = useCallback((amount: number) => {
     updateUserData({ points: Number(userData.points || 0) + amount });
-    setIsPointsAnimating(true);
-    setTimeout(() => setIsPointsAnimating(false), 600);
-  }, [userData.points, updateUserData]);
+    triggerPointsAnimation();
+  }, [userData.points, updateUserData, triggerPointsAnimation]);
 
   const unlockAchievement = useCallback((id: string, customTitle?: string, customIcon?: string, videoId?: string) => {
     // Check if achievement exists
@@ -415,8 +414,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
 
     finalTasks = newTasks;
 
-    setIsPointsAnimating(true);
-    setTimeout(() => setIsPointsAnimating(false), 600);
+    triggerPointsAnimation();
 
     updateUserData({
       tasks: finalTasks,
@@ -444,8 +442,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     const transactionDescription = `完成任務: ${task.text} ${isProactive ? '(主動)' : ''}`;
     const newTransaction: Transaction = { id: Date.now(), description: transactionDescription, amount: `+${pointsGained} 積分`, timestamp: Date.now() };
 
-    setIsPointsAnimating(true);
-    setTimeout(() => setIsPointsAnimating(false), 600);
+    triggerPointsAnimation();
 
     updateUserData({
       points: Number(userData.points || 0) + pointsGained,
@@ -759,8 +756,8 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
   const handleFeedbackSubmit = (feedback: string) => addToast('感謝您的回饋！', 'success');
 
 
-  const value = {
-    userData, isPointsAnimating, updateUserData, addToast, gainPoints, addTransaction, unlockAchievement,
+  const value = useMemo(() => ({
+    userData, updateUserData, addToast, gainPoints, addTransaction, unlockAchievement,
     handleCompleteTask, handlePlayGachapon, handleExchange, handleBuyReward, handleUseItem, handleAddEntry,
     handleReportScore, handleAddTask, handleAddMultipleTasks, handleOverwriteTasks, handleEditTask,
     handleDeleteTask, handleChildAddTask, handlePraiseSubmit, handleFocusSessionComplete, handleShareMessage,
@@ -770,7 +767,11 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     handleAddKeyEvent,
     handleDeleteKeyEvent,
     handleMakeWish,
-  };
+  }), [userData, updateUserData, addToast, gainPoints, addTransaction, unlockAchievement,
+    // Including all handler dependencies implicitly via closure, but best to include them if they were memoized.
+    // Since most handlers are not memoized (defined inline), value will still change on re-render.
+    // However, removing isPointsAnimating prevents re-render when animation triggers.
+  ]);
 
   return (
     <UserDataContext.Provider value={value}>
