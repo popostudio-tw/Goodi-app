@@ -1,0 +1,3 @@
+## 2024-05-23 - [Optimization] Prevent Unnecessary Re-renders in ScoreChart
+**Learning:** React functional components that perform expensive calculations (like generating SVG charts) should be wrapped in `React.memo` if their props are stable but they are rendered inside a parent that updates frequently.
+**Action:** Use `React.memo` for visualization components. When using TypeScript, avoid typing the variable as `React.FC` (which expects a function) when assigning `React.memo(...)` (which returns a `MemoExoticComponent`). Instead, type the props in the argument list: `const MyComp = React.memo(({ prop }: Props) => ...)` to allow correct type inference.
