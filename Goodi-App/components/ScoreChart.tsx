@@ -13,7 +13,10 @@ const COLORS: Record<Subject, string> = {
     '自然': '#84cc16', // lime-500
 };
 
-const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
+// Optimize: Use React.memo to prevent unnecessary re-renders when parent components update
+// but 'scores' prop remains the same. This is crucial for performance as this component
+// renders complex SVG elements.
+const ScoreChart = React.memo(({ scores }: ScoreChartProps) => {
     if (scores.length < 2) {
         return <div className="text-center p-8 text-gray-500">成績紀錄少於兩筆，尚無法繪製圖表。</div>;
     }
@@ -122,6 +125,8 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
             </div>
         </div>
     );
-};
+});
 
 export default ScoreChart;
+// Display name for debugging
+ScoreChart.displayName = 'ScoreChart';
