@@ -628,117 +628,9 @@ export const generateGrowthReport = onCall(
 );
 
 // Cloud Function: generateSafeResponse
-// 優化的悄悄話樹函數，將安全檢查和回應生成合併為單一呼叫
-export const generateSafeResponse = onCall(
-  {
-    secrets: ["GEMINI_API_KEY"],
-  },
-  async (request) => {
-    const { data, auth } = request;
-
-    // 1. 驗證使用者是否登入
-    if (!auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "只有登入使用者才能使用悄悄話樹。"
-      );
-    }
-
-    // API 使用量檢查由 geminiWrapper 統一處理
-
-    // 2. 驗證輸入數據
-    const { userMessage, userNickname } = (data || {}) as {
-      userMessage?: string;
-      userNickname?: string;
-    };
-
-    if (!userMessage || typeof userMessage !== "string") {
-      throw new HttpsError(
-        "invalid-argument",
-        "缺少必要的 userMessage 參數。"
-      );
-    }
-
-    try {
-      // 3. 進行更嚴格的安全檢查
-      // 我們要求 AI 如果偵測到任何負面情緒、威脅、自傷或霸凌，立即標記
-      const safetyPrompt = `
-You are a child safety and psychology expert. 
-Analyze the following message from a child for any signs of:
-- Sadness, depression, or distress
-- Bullying or social isolation
-- Self-harm or suicidal thoughts
-- Aggression, threats, or violence ("打人", "殺", "恨")
-- Explicit or inappropriate content
-
-Respond with ONLY "FLAG" if ANY of the above are detected, even if subtle. 
-Otherwise respond with ONLY "SAFE".
-
-Child's message: "${userMessage}"`;
-
-      // 使用 wrapper 進行安全檢查
-      const safetyCheckResult = await callGemini({
-        source: 'treehouse',
-        userId: auth.uid,
-        prompt: safetyPrompt,
-        model: "gemini-2.0-flash"
-      });
-
-      const safetyResult = (safetyCheckResult.text || "SAFE").trim().toUpperCase();
-      console.log(`Safety check result for "${userMessage.substring(0, 20)}...": ${safetyResult}`);
-
-      // 4. 如果內容需要關注，返回警示
-      if (safetyResult.includes("FLAG") || safetyResult === "FLAG") {
-        return {
-          needsAttention: true,
-          response: "",
-        };
-      }
-
-      // 5. 通過安全檢查，生成回應
-      const nickname = userNickname || "小朋友";
-      const conversationPrompt = `
-You are Goodi, a warm, patient, and friendly AI dinosaur companion for children. 
-${nickname} just shared: "${userMessage}". 
-Please respond in Traditional Chinese (繁體中文).
-Your tone should be very supportive, encouraging, and age-appropriate (5-12 years old).
-Length: 50-100 words.
-Focus on being a good listener and a best friend.`;
-
-      const responseResult = await callGemini({
-        source: 'treehouse',
-        userId: auth.uid,
-        prompt: conversationPrompt,
-        model: "gemini-2.0-flash",
-        config: {
-          temperature: 0.8,
-        },
-      });
-
-      if (shouldUseFallback(responseResult)) {
-        return {
-          needsAttention: false,
-          response: "謝謝你的分享，Goodi 聽到了喔！跟 Goodi 一起加油吧！",
-        };
-      }
-
-      console.log("Goodi response generated successfully");
-
-      // 6. 返回正常回應
-      return {
-        needsAttention: false,
-        response: responseResult.text || "謝謝你的分享，Goodi 聽到了喔！跟 Goodi 一起加油吧！",
-      };
-
-    } catch (error: any) {
-      console.error("WhisperTree Error:", error);
-      throw new HttpsError(
-        "internal",
-        `處理訊息時發生錯誤: ${error.message || "系統忙碌中"}`
-      );
-    }
-  }
-);
+// 使用 V2 邏輯 (generateSafeResponseV2) 取代舊版實作
+import { generateSafeResponseV2 } from "./generateSafeResponseV2";
+export const generateSafeResponse = generateSafeResponseV2;
 
 // === 週報排程生成 ===
 
@@ -1110,7 +1002,8 @@ export { getSystemStatus } from './getSystemStatus';
 
 
 // === AI 架構優化 V2 函式 (2025-12-29) ===
-export { generateSafeResponseV2 } from "./generateSafeResponseV2";
+// generateSafeResponseV2 已經在上方 import 並指派給 generateSafeResponse
+export { generateSafeResponseV2 };
 export { scheduledWeeklyReportsV2 } from "./scheduledWeeklyReportsV2";
 export { scheduledDailySummariesV2 } from "./scheduledDailySummariesV2";
 
