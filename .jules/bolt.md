@@ -1,0 +1,3 @@
+## 2026-01-19 - Monolithic UserContext Forces Downstream Memoization
+**Learning:** The `UserContext` provider passes a large object value that is recreated on every state change (e.g., points update). This forces all consumers, including `ParentModePage`, to re-render. Consequently, heavy child components like `ScoreChart` must be wrapped in `React.memo` even if their props are stable, otherwise they re-render unnecessarily on unrelated context updates.
+**Action:** When working on `ParentModePage` or other main views consuming `UserContext`, aggressively memoize heavy child components. Future architectural improvement: split `UserContext` into `UserActions` (stable) and `UserState` (changing).
