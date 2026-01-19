@@ -13,7 +13,10 @@ const COLORS: Record<Subject, string> = {
     '自然': '#84cc16', // lime-500
 };
 
-const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
+// Bolt Optimization: Wrap in React.memo to prevent unnecessary re-renders.
+// Since this component involves SVG rendering and calculation, avoiding re-renders
+// when 'scores' prop hasn't changed is a valuable performance improvement.
+const ScoreChart = React.memo(({ scores }: ScoreChartProps) => {
     if (scores.length < 2) {
         return <div className="text-center p-8 text-gray-500">成績紀錄少於兩筆，尚無法繪製圖表。</div>;
     }
@@ -45,7 +48,7 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
 
     // Optimize: Memoize expensive calculations for sorted scores and derived data
     // to prevent re-calculation on every render.
-    const { sortedScores, uniqueDates, subjects, dataBySubject } = useMemo(() => {
+    const { uniqueDates, subjects, dataBySubject } = useMemo(() => {
         const sorted = [...scores].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const dates = [...new Set(sorted.map(s => s.date))];
         const subjs = [...new Set(sorted.map(s => s.subject))];
@@ -122,6 +125,6 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
             </div>
         </div>
     );
-};
+});
 
 export default ScoreChart;
