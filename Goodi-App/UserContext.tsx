@@ -746,11 +746,11 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     }
   }, [userData.keyEvents, updateUserData, addToast]);
 
-  const handleSetGachaponPrizes = (prizes: GachaponPrize[]) => updateUserData({ gachaponPrizes: prizes });
-  const handleSetShopRewards = (rewards: Reward[]) => updateUserData({ shopRewards: rewards });
-  const handleSetScoreHistory = (scores: ScoreEntry[]) => updateUserData({ scoreHistory: scores });
-  const handleUpdateUserProfile = (profile: UserProfile) => updateUserData({ userProfile: profile });
-  const handleSetFrozenHabitDates = (dates: string[]) => updateUserData({ frozenHabitDates: dates });
+  const handleSetGachaponPrizes = useCallback((prizes: GachaponPrize[]) => updateUserData({ gachaponPrizes: prizes }), [updateUserData]);
+  const handleSetShopRewards = useCallback((rewards: Reward[]) => updateUserData({ shopRewards: rewards }), [updateUserData]);
+  const handleSetScoreHistory = useCallback((scores: ScoreEntry[]) => updateUserData({ scoreHistory: scores }), [updateUserData]);
+  const handleUpdateUserProfile = useCallback((profile: UserProfile) => updateUserData({ userProfile: profile }), [updateUserData]);
+  const handleSetFrozenHabitDates = useCallback((dates: string[]) => updateUserData({ frozenHabitDates: dates }), [updateUserData]);
   const handleReferral = () => {
     const newCount = (userData.referralCount || 0) + 1;
     updateUserData({ referralCount: newCount });
