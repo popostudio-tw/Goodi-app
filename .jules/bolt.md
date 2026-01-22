@@ -1,0 +1,3 @@
+## 2024-05-23 - UserContext Handler Instability
+**Learning:** The `UserContext` provider recreates all handler functions (e.g., `handleSetScoreHistory`, `handleAddTask`) on every render because they are defined inline without `useCallback`. This causes all consuming components to re-render whenever `userData` changes, even if they are wrapped in `React.memo`, because the handler props change reference.
+**Action:** When optimizing components consuming `UserContext`, always verify if the context handlers are stable. If not, wrap them in `useCallback` within `UserContext.tsx` before applying `React.memo` to the component.

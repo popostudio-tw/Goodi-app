@@ -716,7 +716,7 @@ const ScoreEditModal: React.FC<{ score: ScoreEntry, onSave: (score: ScoreEntry) 
   );
 }
 
-const ScoreManagement: React.FC<{ scores: ScoreEntry[], setScores: (scores: ScoreEntry[]) => void }> = ({ scores, setScores }) => {
+const ScoreManagement: React.FC<{ scores: ScoreEntry[], setScores: (scores: ScoreEntry[]) => void }> = React.memo(({ scores, setScores }) => {
   const [editingScore, setEditingScore] = useState<ScoreEntry | null>(null);
 
   const handleDelete = (id: number) => {
@@ -747,7 +747,7 @@ const ScoreManagement: React.FC<{ scores: ScoreEntry[], setScores: (scores: Scor
       ))}
     </div>
   );
-};
+});
 
 const UserProfileEditor: React.FC<{ profile: UserProfile; onSave: (profile: UserProfile) => void; }> = ({ profile, onSave }) => {
   const [nickname, setNickname] = useState(profile.nickname);
