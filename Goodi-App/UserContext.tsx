@@ -1,4 +1,4 @@
-﻿import React, { createContext, useState, useCallback, useEffect, useRef, useMemo, useContext } from 'react';
+import React, { createContext, useState, useCallback, useEffect, useRef, useMemo, useContext } from 'react';
 import { Page, Task, Reward, JournalEntry, Achievement, Plan, UserProfile, ToastMessage, ScoreEntry, Subject, TestType, InventoryItem, Transaction, GachaponPrize, KeyEvent, FocusSessionCounts, UserData } from './types';
 import { getSafeResponse } from './src/services/apiClient';
 import { db } from './firebase';
@@ -198,6 +198,12 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
   });
 
   const [isPointsAnimating, setIsPointsAnimating] = useState(false);
+  const userDataRef = useRef(userData);
+
+  // Update ref whenever userData changes
+  useEffect(() => {
+    userDataRef.current = userData;
+  }, [userData]);
 
   // Removed: Direct GoogleGenAI usage to prevent API key exposure
   // TODO: Migrate WhisperTree AI功能to Cloud Function
@@ -319,18 +325,21 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
   // --- UTILITY & HELPER FUNCTIONS ---
   const addTransaction = useCallback((description: string, amount: string) => {
     const newTransaction: Transaction = { id: Date.now(), description, amount, timestamp: Date.now() };
-    updateUserData({ transactions: [newTransaction, ...userData.transactions] });
-  }, [userData.transactions, updateUserData]);
+    const currentTransactions = userDataRef.current.transactions;
+    updateUserData({ transactions: [newTransaction, ...currentTransactions] });
+  }, [updateUserData]);
 
   const gainPoints = useCallback((amount: number) => {
-    updateUserData({ points: Number(userData.points || 0) + amount });
+    const currentPoints = Number(userDataRef.current.points || 0);
+    updateUserData({ points: currentPoints + amount });
     setIsPointsAnimating(true);
     setTimeout(() => setIsPointsAnimating(false), 600);
-  }, [userData.points, updateUserData]);
+  }, [updateUserData]);
 
   const unlockAchievement = useCallback((id: string, customTitle?: string, customIcon?: string, videoId?: string) => {
     // Check if achievement exists
-    const existingAch = userData.achievements.find(a => a.id === id);
+    const currentData = userDataRef.current;
+    const existingAch = currentData.achievements.find(a => a.id === id);
 
     if (existingAch) {
       if (!existingAch.unlocked) {
@@ -338,8 +347,8 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
         addToast(`成就解鎖：${existingAch.title}`, 'celebrate');
         const newItem: InventoryItem = { id: Date.now() + Math.random(), name: '成就獎勵寶箱', description: 'https://api.iconify.design/twemoji/gem-stone.svg', timestamp: Date.now(), used: false };
         updateUserData({
-          achievements: userData.achievements.map(a => a.id === id ? { ...a, unlocked: true, videoId: videoId || a.videoId } : a),
-          inventory: [newItem, ...userData.inventory]
+          achievements: currentData.achievements.map(a => a.id === id ? { ...a, unlocked: true, videoId: videoId || a.videoId } : a),
+          inventory: [newItem, ...currentData.inventory]
         });
         addTransaction('獲得成就獎勵', '成就獎勵寶箱');
       }
@@ -349,27 +358,29 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       const newItem: InventoryItem = { id: Date.now() + Math.random(), name: '大師獎勵寶箱', description: 'https://api.iconify.design/twemoji/crown.svg', timestamp: Date.now(), used: false };
 
       updateUserData({
-        inventory: [newItem, ...userData.inventory]
+        inventory: [newItem, ...currentData.inventory]
       });
       addTransaction('獲得大師獎勵', '大師獎勵寶箱');
     }
-  }, [userData.achievements, userData.inventory, updateUserData, addToast, addTransaction]);
+  }, [updateUserData, addToast, addTransaction]);
 
   const checkAchievements = useCallback(() => {
-    const completedTasks = userData.tasks.filter(t => t.completed);
+    const currentData = userDataRef.current;
+    const completedTasks = currentData.tasks.filter(t => t.completed);
     const check = (id: string, condition: boolean) => {
-      if (!userData.achievements.find(a => a.id === id)?.unlocked && condition) unlockAchievement(id);
+      if (!currentData.achievements.find(a => a.id === id)?.unlocked && condition) unlockAchievement(id);
     };
     check('learn_1', completedTasks.filter(t => t.category === '學習').length >= 1);
     check('tasks_10', completedTasks.length >= 10);
-    check('referral_1', userData.referralCount >= 1);
-  }, [userData.tasks, userData.achievements, userData.referralCount, unlockAchievement]);
+    check('referral_1', currentData.referralCount >= 1);
+  }, [unlockAchievement]);
 
-  useEffect(() => { checkAchievements(); }, [checkAchievements]);
+  useEffect(() => { checkAchievements(); }, [checkAchievements, userData.tasks, userData.referralCount]); // Dependencies kept for effect trigger
 
   // --- MAIN HANDLERS ---
-  const handleCompleteTask = (taskId: number, isProactive: boolean) => {
-    const task = userData.tasks.find(t => t.id === taskId);
+  const handleCompleteTask = useCallback((taskId: number, isProactive: boolean) => {
+    const currentData = userDataRef.current;
+    const task = currentData.tasks.find(t => t.id === taskId);
     if (!task || task.completed) return;
 
     // Logic for Mastery: 1.5x points
@@ -382,9 +393,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
 
     const newTransaction: Transaction = { id: Date.now(), description: `完成任務: ${task.text} ${isProactive ? '(主動)' : ''} ${task.mastered ? '(大師加成)' : ''}`, amount: `+${pointsGained} 積分`, timestamp: Date.now() };
 
-    let finalTasks = userData.tasks;
-
-    const newTasks = userData.tasks.map(t => {
+    const newTasks = currentData.tasks.map(t => {
       if (t.id === taskId) {
         const updatedTask = { ...t, completed: true };
 
@@ -413,34 +422,33 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       return t;
     });
 
-    finalTasks = newTasks;
-
     setIsPointsAnimating(true);
     setTimeout(() => setIsPointsAnimating(false), 600);
 
     updateUserData({
-      tasks: finalTasks,
-      streak: userData.streak + 1,
-      points: Number(userData.points || 0) + pointsGained,
-      transactions: [newTransaction, ...userData.transactions],
+      tasks: newTasks,
+      streak: currentData.streak + 1,
+      points: Number(currentData.points || 0) + pointsGained,
+      transactions: [newTransaction, ...currentData.transactions],
     });
 
     const praiseMsg = task.mastered
       ? `大師級表現！獲得 ${pointsGained} 積分 (含加成)！`
       : `任務完成！獲得 ${pointsGained} 積分！`;
     addToast(praiseMsg, 'success');
-  };
+  }, [updateUserData, addToast, unlockAchievement]);
 
-  const handlePraiseSubmit = (taskId: number, isProactive: boolean, praiseText: string) => {
+  const handlePraiseSubmit = useCallback((taskId: number, isProactive: boolean, praiseText: string) => {
+    const currentData = userDataRef.current;
     const targetId = 27;
-    let task = userData.tasks.find(t => t.id === targetId);
+    let task = currentData.tasks.find(t => t.id === targetId);
     if (!task) { task = initialTasksData.find(t => t.id === 27); }
     if (!task) { task = { id: 27, text: '得到老師稱讚', points: 5, completed: false, category: '特殊', description: '今天在學校表現很棒！', icon: 'https://api.iconify.design/twemoji/star-struck.svg' } as Task; }
 
     if (task.completed) { addToast('今天已經領過獎勵囉！明天再來吧！'); return; }
 
     const pointsGained = isProactive ? Math.floor(Number(task.points) * 1.5) : Number(task.points);
-    const updatedTasks = userData.tasks.map(t => t.id === targetId ? { ...t, completed: true } : t);
+    const updatedTasks = currentData.tasks.map(t => t.id === targetId ? { ...t, completed: true } : t);
     const transactionDescription = `完成任務: ${task.text} ${isProactive ? '(主動)' : ''}`;
     const newTransaction: Transaction = { id: Date.now(), description: transactionDescription, amount: `+${pointsGained} 積分`, timestamp: Date.now() };
 
@@ -448,29 +456,30 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     setTimeout(() => setIsPointsAnimating(false), 600);
 
     updateUserData({
-      points: Number(userData.points || 0) + pointsGained,
+      points: Number(currentData.points || 0) + pointsGained,
       tasks: updatedTasks,
-      streak: userData.streak + 1,
-      sharedMessages: [`老師稱讚「${userData.userProfile.nickname}」因為：${praiseText}`, ...userData.sharedMessages],
-      transactions: [newTransaction, ...userData.transactions],
+      streak: currentData.streak + 1,
+      sharedMessages: [`老師稱讚「${currentData.userProfile.nickname}」因為：${praiseText}`, ...currentData.sharedMessages],
+      transactions: [newTransaction, ...currentData.transactions],
     });
     addToast(`太棒了！獲得 ${pointsGained} 積分！`, 'celebrate');
-  };
+  }, [updateUserData, addToast]);
 
-  const handlePlayGachapon = (): InventoryItem | null => {
-    if (userData.gachaponTickets < 1) { addToast('扭蛋券不足！'); return null; }
-    const rand = Math.random() * userData.gachaponPrizes.reduce((s, p) => s + p.percentage, 0);
+  const handlePlayGachapon = useCallback((): InventoryItem | null => {
+    const currentData = userDataRef.current;
+    if (currentData.gachaponTickets < 1) { addToast('扭蛋券不足！'); return null; }
+    const rand = Math.random() * currentData.gachaponPrizes.reduce((s, p) => s + p.percentage, 0);
     let cumulative = 0;
-    const prize = userData.gachaponPrizes.find(p => (cumulative += p.percentage) >= rand) || userData.gachaponPrizes[0];
+    const prize = currentData.gachaponPrizes.find(p => (cumulative += p.percentage) >= rand) || currentData.gachaponPrizes[0];
     if (!prize) return null;
 
-    let updates: Partial<Omit<UserData, 'lastLoginDate'>> = { gachaponTickets: userData.gachaponTickets - 1 };
+    let updates: Partial<Omit<UserData, 'lastLoginDate'>> = { gachaponTickets: currentData.gachaponTickets - 1 };
     const newItem: InventoryItem = { id: Date.now(), name: prize.name, description: prize.icon, timestamp: Date.now(), used: false };
 
     if (prize.name.includes('積分')) {
       const pointsWon = parseInt(prize.name.match(/\d+/)?.[0] || '0', 10);
       if (pointsWon > 0) {
-        updates.points = Number(userData.points || 0) + pointsWon;
+        updates.points = Number(currentData.points || 0) + pointsWon;
         newItem.used = true;
         addToast(`恭喜抽中 ${pointsWon} 積分！`, 'celebrate');
         addTransaction('神奇扭蛋機', `+${pointsWon} 積分`);
@@ -480,49 +489,53 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       addTransaction('神奇扭蛋機', '獲得獎品');
     }
 
-    updates.inventory = [newItem, ...userData.inventory];
+    updates.inventory = [newItem, ...currentData.inventory];
     updateUserData(updates);
     return newItem;
-  };
+  }, [updateUserData, addToast, addTransaction]);
 
-  const handleExchange = (pointsToSpend: number, tokensToGet: number) => {
-    if (userData.points < pointsToSpend) { addToast('積分不足！'); return false; }
-    updateUserData({ points: userData.points - pointsToSpend, tokens: userData.tokens + tokensToGet });
+  const handleExchange = useCallback((pointsToSpend: number, tokensToGet: number) => {
+    const currentData = userDataRef.current;
+    if (currentData.points < pointsToSpend) { addToast('積分不足！'); return false; }
+    updateUserData({ points: currentData.points - pointsToSpend, tokens: currentData.tokens + tokensToGet });
     addTransaction('積分兌換', `-${pointsToSpend} 積分, +${tokensToGet} 代幣`);
     addToast(`成功兌換 ${tokensToGet} 代幣！`, 'success');
     return true;
-  };
+  }, [updateUserData, addToast, addTransaction]);
 
-  const handleBuyReward = (reward: Reward) => {
-    if (userData.tokens < reward.cost) { addToast('代幣不足！'); return false; }
+  const handleBuyReward = useCallback((reward: Reward) => {
+    const currentData = userDataRef.current;
+    if (currentData.tokens < reward.cost) { addToast('代幣不足！'); return false; }
     addTransaction(`購買獎勵: ${reward.name}`, `-${reward.cost} 代幣`);
-    let updates: Partial<Omit<UserData, 'lastLoginDate'>> = { tokens: userData.tokens - reward.cost };
+    let updates: Partial<Omit<UserData, 'lastLoginDate'>> = { tokens: currentData.tokens - reward.cost };
     if (reward.action === 'add_ticket') {
-      updates.gachaponTickets = userData.gachaponTickets + 1;
+      updates.gachaponTickets = currentData.gachaponTickets + 1;
       addToast('成功購買扭蛋券！', 'success');
     } else {
       const newItem: InventoryItem = { id: Date.now(), name: reward.name, description: reward.icon, timestamp: Date.now(), used: false, action: reward.action, durationMinutes: reward.durationMinutes };
-      updates.inventory = [newItem, ...userData.inventory];
+      updates.inventory = [newItem, ...currentData.inventory];
       addToast(`成功購買 ${reward.name}！`, 'success');
     }
     updateUserData(updates);
     return true;
-  };
+  }, [updateUserData, addToast, addTransaction]);
 
-  const handleMakeWish = (wish: string): boolean => {
+  const handleMakeWish = useCallback((wish: string): boolean => {
+    const currentData = userDataRef.current;
     const cost = 50;
-    if (userData.tokens < cost) { addToast('代幣不足！'); return false; }
+    if (currentData.tokens < cost) { addToast('代幣不足！'); return false; }
     addTransaction('許願池', `-${cost} 代幣`);
     updateUserData({
-      tokens: userData.tokens - cost,
-      wishes: [wish, ...userData.wishes]
+      tokens: currentData.tokens - cost,
+      wishes: [wish, ...currentData.wishes]
     });
     addToast('願望已送出！', 'success');
     return true;
-  };
+  }, [updateUserData, addToast, addTransaction]);
 
-  const handleUseItem = (id: number, callbacks: { onStartParentChildTime: () => void }) => {
-    const item = userData.inventory.find(i => i.id === id);
+  const handleUseItem = useCallback((id: number, callbacks: { onStartParentChildTime: () => void }) => {
+    const currentData = userDataRef.current;
+    const item = currentData.inventory.find(i => i.id === id);
     if (!item || item.used) return;
     if (item.action === 'parent_child_time' && item.durationMinutes) { callbacks.onStartParentChildTime(); return; }
 
@@ -530,24 +543,25 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     let updates: Partial<Omit<UserData, 'lastLoginDate'>> = {};
     if (item.name === '成就獎勵寶箱' || item.name === '大師獎勵寶箱') {
       const pointsWon = Math.floor(Math.random() * 30) + 20;
-      updates.points = userData.points + pointsWon;
+      updates.points = currentData.points + pointsWon;
       addToast(`打開寶箱！獲得 ${pointsWon} 積分！`, 'celebrate');
       addTransaction(`開啟${item.name}`, `+${pointsWon} 積分`);
       usedSuccessfully = true;
     }
     if (!usedSuccessfully) { addToast('獎品已核銷！'); }
-    updates.inventory = userData.inventory.map(i => (i.id === id ? { ...i, used: true } : i));
+    updates.inventory = currentData.inventory.map(i => (i.id === id ? { ...i, used: true } : i));
     updateUserData(updates);
-  };
+  }, [updateUserData, addToast, addTransaction]);
 
-  const handleAddEntry = async (text: string) => {
+  const handleAddEntry = useCallback(async (text: string) => {
+    const currentData = userDataRef.current;
     const userEntry: JournalEntry = { id: Date.now(), text, date: new Date().toISOString(), author: 'user' };
-    updateUserData({ journalEntries: [...userData.journalEntries, userEntry] });
+    updateUserData({ journalEntries: [...currentData.journalEntries, userEntry] });
 
     try {
       console.log('[TreeHole] Calling getSafeResponse API...');
       // 調用後端 Cloud Function (安全的方式)
-      const result = await getSafeResponse(text, userData.userProfile?.nickname);
+      const result = await getSafeResponse(text, currentData.userProfile?.nickname);
 
       // 處理返回結果
       if (result.success && result.data) {
@@ -558,8 +572,8 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
         // 如果需要家長關注，添加到 sharedMessages
         if (needsAttention) {
           updateUserData({
-            journalEntries: [...userData.journalEntries, userEntry],
-            sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...userData.sharedMessages]
+            journalEntries: [...currentData.journalEntries, userEntry],
+            sharedMessages: [`【安全警示】孩子在心事樹洞中提到了可能令人擔憂的內容：「${text}」`, ...currentData.sharedMessages]
           });
         }
 
@@ -570,7 +584,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
           date: new Date().toISOString(),
           author: 'goodi'
         };
-        updateUserData({ journalEntries: [...userData.journalEntries, userEntry, goodiEntry] });
+        updateUserData({ journalEntries: [...currentData.journalEntries, userEntry, goodiEntry] });
 
       } else {
         // API 失敗，使用 fallback
@@ -581,7 +595,7 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
           date: new Date().toISOString(),
           author: 'goodi'
         };
-        updateUserData({ journalEntries: [...userData.journalEntries, userEntry, fallbackEntry] });
+        updateUserData({ journalEntries: [...currentData.journalEntries, userEntry, fallbackEntry] });
       }
 
     } catch (error) {
@@ -593,24 +607,26 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
         date: new Date().toISOString(),
         author: 'goodi'
       };
-      updateUserData({ journalEntries: [...userData.journalEntries, userEntry, errorEntry] });
+      updateUserData({ journalEntries: [...currentData.journalEntries, userEntry, errorEntry] });
     }
-  };
+  }, [updateUserData]);
 
-  const handleReportScore = (details: { subject: Subject; testType: TestType; score: number }) => {
+  const handleReportScore = useCallback((details: { subject: Subject; testType: TestType; score: number }) => {
+    const currentData = userDataRef.current;
     const newEntry: ScoreEntry = { id: Date.now(), date: new Date().toISOString().split('T')[0], ...details };
     if (details.score === 100) {
-      const recentScores = [...userData.scoreHistory].slice(0, 2);
+      const recentScores = [...currentData.scoreHistory].slice(0, 2);
       if (recentScores.length === 2 && recentScores.every(s => s.score === 100)) unlockAchievement('score_perfect_streak_3');
     }
-    const newScoreHistory = [newEntry, ...userData.scoreHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const newScoreHistory = [newEntry, ...currentData.scoreHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     updateUserData({ scoreHistory: newScoreHistory });
     gainPoints(2);
     addToast('謝謝你的分享！獲得 2 積分！');
     addTransaction('回報考卷成績', '+2 積分');
-  };
+  }, [updateUserData, gainPoints, addToast, addTransaction, unlockAchievement]);
 
-  const handleAddTask = (taskData: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>) => {
+  const handleAddTask = useCallback((taskData: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>) => {
+    const currentData = userDataRef.current;
     const newTask: Task = {
       ...taskData,
       id: Date.now(),
@@ -619,33 +635,37 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       consecutiveCompletions: 0,
       addedBy: 'parent'
     };
-    updateUserData({ tasks: [...userData.tasks, newTask] });
+    updateUserData({ tasks: [...currentData.tasks, newTask] });
     addToast('任務已新增！');
-  };
+  }, [updateUserData, addToast]);
 
-  const handleEditTask = (updatedTask: Task) => {
-    updateUserData({ tasks: userData.tasks.map(t => t.id === updatedTask.id ? updatedTask : t) });
+  const handleEditTask = useCallback((updatedTask: Task) => {
+    const currentData = userDataRef.current;
+    updateUserData({ tasks: currentData.tasks.map(t => t.id === updatedTask.id ? updatedTask : t) });
     addToast('任務已更新！');
-  };
+  }, [updateUserData, addToast]);
 
-  const handleDeleteTask = (taskId: number) => {
-    updateUserData({ tasks: userData.tasks.filter(t => t.id !== taskId) });
+  const handleDeleteTask = useCallback((taskId: number) => {
+    const currentData = userDataRef.current;
+    updateUserData({ tasks: currentData.tasks.filter(t => t.id !== taskId) });
     addToast('任務已刪除！');
-  };
+  }, [updateUserData, addToast]);
 
-  const handleAddMultipleTasks = (newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => {
+  const handleAddMultipleTasks = useCallback((newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => {
+    const currentData = userDataRef.current;
     const tasksToAdd = newTasks.map(task => ({ ...task, id: Date.now() + Math.random(), completed: false, isHabit: task.category !== '學習' && task.category !== '特殊', consecutiveCompletions: 0, addedBy: 'parent' as const }));
-    updateUserData({ tasks: [...userData.tasks, ...tasksToAdd] });
+    updateUserData({ tasks: [...currentData.tasks, ...tasksToAdd] });
     addToast(`成功匯入 ${newTasks.length} 個任務！`);
-  };
+  }, [updateUserData, addToast]);
 
-  const handleOverwriteTasks = (newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => {
+  const handleOverwriteTasks = useCallback((newTasks: Omit<Task, 'id' | 'completed' | 'isHabit' | 'consecutiveCompletions'>[]) => {
     const tasksToAdd = newTasks.map(task => ({ ...task, id: Date.now() + Math.random(), completed: false, isHabit: task.category !== '學習' && task.category !== '特殊', consecutiveCompletions: 0, addedBy: 'parent' as const }));
     updateUserData({ tasks: tasksToAdd });
     addToast(`成功匯入並覆蓋了 ${newTasks.length} 個任務！`);
-  };
+  }, [updateUserData, addToast]);
 
-  const handleChildAddTask = (text: string, frequency: 'today' | 'everyday' | 'schooldays') => {
+  const handleChildAddTask = useCallback((text: string, frequency: 'today' | 'everyday' | 'schooldays') => {
+    const currentData = userDataRef.current;
     const todayStr = new Date().toISOString().split('T')[0];
     let schedule: Task['schedule'] = undefined;
     let dateRange: Task['dateRange'] = undefined;
@@ -672,13 +692,14 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       ...(schedule ? { schedule } : {}),
       ...(dateRange ? { dateRange } : {})
     };
-    updateUserData({ tasks: [...userData.tasks, newTask] });
+    updateUserData({ tasks: [...currentData.tasks, newTask] });
     addToast(`新增任務：「${text}」！`);
-  };
+  }, [updateUserData, addToast]);
 
-  const handleFocusSessionComplete = (durationInSeconds: number) => {
+  const handleFocusSessionComplete = useCallback((durationInSeconds: number) => {
+    const currentData = userDataRef.current;
     const durationInMins = durationInSeconds / 60;
-    const newCounts = { ...userData.focusSessionCounts, [durationInMins]: (userData.focusSessionCounts[durationInMins] || 0) + 1 };
+    const newCounts = { ...currentData.focusSessionCounts, [durationInMins]: (currentData.focusSessionCounts[durationInMins] || 0) + 1 };
     gainPoints(2);
     updateUserData({ focusSessionCounts: newCounts });
     addToast('專注時間完成！獎勵 2 積分！');
@@ -693,26 +714,28 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       addToast(`達成 ${totalSessions} 次專注！額外獎勵 ${bonus} 積分！`, 'celebrate');
       addTransaction(`達成 ${totalSessions} 次專注里程碑`, `+${bonus} 積分`);
     }
-  };
+  }, [updateUserData, gainPoints, addToast, addTransaction]);
 
-  const handleShareMessage = (message: string) => {
+  const handleShareMessage = useCallback((message: string) => {
+    const currentData = userDataRef.current;
     if (!message.trim()) return;
     updateUserData({
-      sharedMessages: [message.trim(), ...userData.sharedMessages]
+      sharedMessages: [message.trim(), ...currentData.sharedMessages]
     });
     gainPoints(5);
     addTransaction('想跟家人分享的事', `+5 積分`);
     addToast('訊息已分享！獲得 5 積分！', 'success');
-  };
+  }, [updateUserData, gainPoints, addTransaction, addToast]);
 
   const handleDismissParentIntro = useCallback(() => {
     updateUserData({ parentIntroDismissed: true });
   }, [updateUserData]);
 
   const handleManualPointAdjustment = useCallback((amount: number, reason: string) => {
+    const currentData = userDataRef.current;
     if (isNaN(amount) || amount === 0) return;
 
-    const currentPoints = Number(userData.points || 0);
+    const currentPoints = Number(currentData.points || 0);
     const newPoints = currentPoints + amount;
 
     if (newPoints < 0) {
@@ -726,40 +749,43 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     addTransaction(`家長手動調整 ${reasonText}`, amountStr);
     addToast(`積分已調整！`);
 
-  }, [userData.points, updateUserData, addTransaction, addToast]);
+  }, [updateUserData, addTransaction, addToast]);
 
   const handleAddKeyEvent = useCallback((text: string, date: string) => {
+    const currentData = userDataRef.current;
     if (!text.trim()) return;
     const newEvent: KeyEvent = {
       id: Date.now(),
       date: date,
       text: text.trim(),
     };
-    updateUserData({ keyEvents: [...userData.keyEvents, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) });
+    updateUserData({ keyEvents: [...currentData.keyEvents, newEvent].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) });
     addToast('紀事已新增！');
-  }, [userData.keyEvents, updateUserData, addToast]);
+  }, [updateUserData, addToast]);
 
   const handleDeleteKeyEvent = useCallback((id: number) => {
+    const currentData = userDataRef.current;
     if (window.confirm('確定要刪除這筆紀事嗎？')) {
-      updateUserData({ keyEvents: userData.keyEvents.filter(e => e.id !== id) });
+      updateUserData({ keyEvents: currentData.keyEvents.filter(e => e.id !== id) });
       addToast('紀事已刪除。');
     }
-  }, [userData.keyEvents, updateUserData, addToast]);
+  }, [updateUserData, addToast]);
 
-  const handleSetGachaponPrizes = (prizes: GachaponPrize[]) => updateUserData({ gachaponPrizes: prizes });
-  const handleSetShopRewards = (rewards: Reward[]) => updateUserData({ shopRewards: rewards });
-  const handleSetScoreHistory = (scores: ScoreEntry[]) => updateUserData({ scoreHistory: scores });
-  const handleUpdateUserProfile = (profile: UserProfile) => updateUserData({ userProfile: profile });
-  const handleSetFrozenHabitDates = (dates: string[]) => updateUserData({ frozenHabitDates: dates });
-  const handleReferral = () => {
-    const newCount = (userData.referralCount || 0) + 1;
+  const handleSetGachaponPrizes = useCallback((prizes: GachaponPrize[]) => updateUserData({ gachaponPrizes: prizes }), [updateUserData]);
+  const handleSetShopRewards = useCallback((rewards: Reward[]) => updateUserData({ shopRewards: rewards }), [updateUserData]);
+  const handleSetScoreHistory = useCallback((scores: ScoreEntry[]) => updateUserData({ scoreHistory: scores }), [updateUserData]);
+  const handleUpdateUserProfile = useCallback((profile: UserProfile) => updateUserData({ userProfile: profile }), [updateUserData]);
+  const handleSetFrozenHabitDates = useCallback((dates: string[]) => updateUserData({ frozenHabitDates: dates }), [updateUserData]);
+  const handleReferral = useCallback(() => {
+    const currentData = userDataRef.current;
+    const newCount = (currentData.referralCount || 0) + 1;
     updateUserData({ referralCount: newCount });
     if (newCount >= 1) unlockAchievement('referral_1');
-  };
-  const handleFeedbackSubmit = (feedback: string) => addToast('感謝您的回饋！', 'success');
+  }, [updateUserData, unlockAchievement]);
+  const handleFeedbackSubmit = useCallback((feedback: string) => addToast('感謝您的回饋！', 'success'), [addToast]);
 
 
-  const value = {
+  const value = useMemo(() => ({
     userData, isPointsAnimating, updateUserData, addToast, gainPoints, addTransaction, unlockAchievement,
     handleCompleteTask, handlePlayGachapon, handleExchange, handleBuyReward, handleUseItem, handleAddEntry,
     handleReportScore, handleAddTask, handleAddMultipleTasks, handleOverwriteTasks, handleEditTask,
@@ -770,7 +796,18 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     handleAddKeyEvent,
     handleDeleteKeyEvent,
     handleMakeWish,
-  };
+  }), [
+    userData, isPointsAnimating, updateUserData, addToast, gainPoints, addTransaction, unlockAchievement,
+    handleCompleteTask, handlePlayGachapon, handleExchange, handleBuyReward, handleUseItem, handleAddEntry,
+    handleReportScore, handleAddTask, handleAddMultipleTasks, handleOverwriteTasks, handleEditTask,
+    handleDeleteTask, handleChildAddTask, handlePraiseSubmit, handleFocusSessionComplete, handleShareMessage,
+    handleSetGachaponPrizes, handleSetShopRewards, handleSetScoreHistory, handleUpdateUserProfile,
+    handleSetFrozenHabitDates, handleReferral, handleFeedbackSubmit,
+    handleDismissParentIntro, handleManualPointAdjustment,
+    handleAddKeyEvent,
+    handleDeleteKeyEvent,
+    handleMakeWish
+  ]);
 
   return (
     <UserDataContext.Provider value={value}>
