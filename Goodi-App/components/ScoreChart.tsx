@@ -124,4 +124,6 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+// Optimize: Use React.memo to prevent unnecessary re-renders when parent re-renders but scores remain unchanged.
+// Impact: Prevents expensive SVG DOM reconciliation and recalculations during frequent Dashboard updates.
+export default React.memo(ScoreChart);
