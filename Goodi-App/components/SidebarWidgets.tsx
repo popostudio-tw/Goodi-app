@@ -243,7 +243,6 @@ const AiYesterdaySummary: React.FC = () => {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const { userData } = useUserData();
 
   useEffect(() => {
     const currentUser = auth.currentUser;
@@ -445,4 +444,5 @@ const SidebarWidgets: React.FC = () => {
   );
 };
 
-export default SidebarWidgets;
+// Memoized to prevent re-renders when parent (HomePage) state changes (e.g. dailyTab)
+export default React.memo(SidebarWidgets);
