@@ -124,4 +124,6 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+// Optimize: Use React.memo to prevent unnecessary re-renders when parent components (e.g. ParentModePage) update.
+// The 'scores' prop is usually stable (from UserContext state) unless data actually changes.
+export default React.memo(ScoreChart);
