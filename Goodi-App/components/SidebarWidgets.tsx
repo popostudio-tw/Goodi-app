@@ -239,11 +239,11 @@ const DailyStats: React.FC = () => {
   );
 }
 
+// Optimized: Intentionally avoids subscribing to UserContext to prevent re-renders on unrelated data changes
 const AiYesterdaySummary: React.FC = () => {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const { userData } = useUserData();
 
   useEffect(() => {
     const currentUser = auth.currentUser;
@@ -431,7 +431,8 @@ const AnimalTrivia: React.FC = () => {
   );
 };
 
-const SidebarWidgets: React.FC = () => {
+// Optimized: Memoized to prevent re-renders when parent (HomePage) updates but widgets don't need to
+const SidebarWidgets = React.memo(() => {
   return (
     <div className="space-y-4 pb-4">
       <GreetingCard />
@@ -443,6 +444,6 @@ const SidebarWidgets: React.FC = () => {
       <KeyEventsWidget />
     </div>
   );
-};
+});
 
 export default SidebarWidgets;
