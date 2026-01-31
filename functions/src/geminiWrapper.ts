@@ -350,24 +350,22 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                 console.warn(`[Retry Policy] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error.message);
 
                 // Fallback Logic: If Gemini 2.0 Flash fails (likely due to availability), fallback to 1.5 Pro
-                if (model === "gemini-2.0-flash" && (
-                    error.message?.includes('not found') ||
-                    error.message?.includes('404') ||
-                    error.status === 404 ||
-                    error.message?.includes('invalid model')
-                )) {
-                    console.warn(`[Gemini Wrapper] Model ${model} failed (404/Invalid). Falling back to gemini-1.5-pro for next attempt.`);
+                // Aggressive Fallback: Fallback for ANY error on 2.0 Flash (except explicit quota exhaustion which should stop)
+                if (model === "gemini-2.0-flash") {
+                     // Check if it's a quota error (429) - if so, maybe we SHOULD fallback to 1.5 Pro as it might have different quota?
+                     // However, usually quota is project-wide. But 2.0 Flash is a different model class.
+                     // Let's allow fallback even for 429 on 2.0 Flash, just in case.
+                     // We will catch the FINAL failure if 1.5 Pro also fails.
+
+                    console.warn(`[Gemini Wrapper] Model ${model} failed with error: ${error.message}. Aggressively falling back to gemini-1.5-pro.`);
                     model = "gemini-1.5-pro";
-                    // Continue to next iteration (retry with new model)
-                    // We artificially set attempt to -1 so we don't exhaust retries immediately if we want fresh start,
-                    // but simply continuing uses the current attempt count.
-                    // To ensure we get a fair shot with the new model, we can decrease attempt count by 1 (optional),
-                    // but simpler is just to let it retry in next loop iteration.
+
                     await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay before fallback retry
                     continue;
                 }
 
                 // 檢查是否為永久性錯誤（404、400、429 等不應重試）
+                // Note: If we fell back to 1.5-pro, we are now here checking 1.5-pro errors.
                 const isPermanentFailure =
                     error.message?.includes('not found') ||
                     error.message?.includes('404') ||
