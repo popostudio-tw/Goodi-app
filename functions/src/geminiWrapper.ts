@@ -156,7 +156,14 @@ function getTodayDateStr(): string {
 
 // === 核心函數：集中式 Gemini API 呼叫（含 Retry、Circuit Breaker、Concurrency Control）===
 export async function callGemini(params: GeminiCallParams): Promise<GeminiCallResult> {
-    const { source, userId, prompt, model = "gemini-2.0-flash", config } = params;
+    let { source, userId, prompt, model = "gemini-2.0-flash", config } = params;
+
+    // Safeguard: Automatically upgrade deprecated models
+    if (model === "gemini-1.5-flash" || model === "gemini-1.0-pro") {
+        console.warn(`[Gemini Wrapper] Auto-upgrading deprecated model ${model} to gemini-2.0-flash`);
+        model = "gemini-2.0-flash";
+    }
+
     const db = getFirestore();
     const today = getTodayDateStr();
     const usageDocRef = db.collection('apiUsage').doc(`global_${today}`);
