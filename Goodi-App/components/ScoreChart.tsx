@@ -124,4 +124,4 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+export default React.memo(ScoreChart);
