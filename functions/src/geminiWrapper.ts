@@ -311,7 +311,7 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                 // Build request - config params must be in generationConfig
                 const requestParams: any = {
                     model,
-                    contents: prompt
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }]
                 };
 
                 if (config) {
@@ -348,6 +348,24 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                 break; // 成功，跳出重試循環
             } catch (error: any) {
                 console.warn(`[Retry Policy] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error.message);
+
+                // Fallback Logic: If Gemini 2.0 Flash fails (likely due to availability), fallback to 1.5 Pro
+                if (model === "gemini-2.0-flash" && (
+                    error.message?.includes('not found') ||
+                    error.message?.includes('404') ||
+                    error.status === 404 ||
+                    error.message?.includes('invalid model')
+                )) {
+                    console.warn(`[Gemini Wrapper] Model ${model} failed (404/Invalid). Falling back to gemini-1.5-pro for next attempt.`);
+                    model = "gemini-1.5-pro";
+                    // Continue to next iteration (retry with new model)
+                    // We artificially set attempt to -1 so we don't exhaust retries immediately if we want fresh start,
+                    // but simply continuing uses the current attempt count.
+                    // To ensure we get a fair shot with the new model, we can decrease attempt count by 1 (optional),
+                    // but simpler is just to let it retry in next loop iteration.
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay before fallback retry
+                    continue;
+                }
 
                 // 檢查是否為永久性錯誤（404、400、429 等不應重試）
                 const isPermanentFailure =
