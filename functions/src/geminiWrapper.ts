@@ -349,18 +349,20 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             } catch (error: any) {
                 console.warn(`[Retry Policy] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error.message);
 
-                // Fallback Logic: If Gemini 2.0 Flash fails (likely due to availability), fallback to 1.5 Pro
-                // Aggressive Fallback: Fallback for ANY error on 2.0 Flash (except explicit quota exhaustion which should stop)
+                // Fallback Logic: Chain of fallbacks for robustness
+                // gemini-2.0-flash -> gemini-1.5-pro -> gemini-1.0-pro
+
                 if (model === "gemini-2.0-flash") {
-                     // Check if it's a quota error (429) - if so, maybe we SHOULD fallback to 1.5 Pro as it might have different quota?
-                     // However, usually quota is project-wide. But 2.0 Flash is a different model class.
-                     // Let's allow fallback even for 429 on 2.0 Flash, just in case.
-                     // We will catch the FINAL failure if 1.5 Pro also fails.
-
-                    console.warn(`[Gemini Wrapper] Model ${model} failed with error: ${error.message}. Aggressively falling back to gemini-1.5-pro.`);
+                    console.warn(`[Gemini Wrapper] Model ${model} failed: ${error.message}. Fallback to gemini-1.5-pro.`);
                     model = "gemini-1.5-pro";
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    continue;
+                }
 
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay before fallback retry
+                if (model === "gemini-1.5-pro") {
+                    console.warn(`[Gemini Wrapper] Model ${model} failed: ${error.message}. Fallback to gemini-1.0-pro.`);
+                    model = "gemini-1.0-pro";
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     continue;
                 }
 
