@@ -160,12 +160,14 @@ function getTodayDateStr(): string {
 
 // === 核心函數：集中式 Gemini API 呼叫（含 Retry、Circuit Breaker、Concurrency Control）===
 export async function callGemini(params: GeminiCallParams): Promise<GeminiCallResult> {
-    let { source, userId, prompt, model = "gemini-2.0-flash", config } = params;
+    // EMERGENCY FIX: Default to gemini-1.5-pro due to 2.0-flash quota limit: 0 issue
+    let { source, userId, prompt, model = "gemini-1.5-pro", config } = params;
 
-    // Safeguard: Automatically upgrade deprecated models
-    if (model === "gemini-1.5-flash" || model === "gemini-1.0-pro") {
-        console.warn(`[Gemini Wrapper] Auto-upgrading deprecated model ${model} to gemini-2.0-flash`);
-        model = "gemini-2.0-flash";
+    // Safeguard: Automatically upgrade deprecated models or broken models
+    // Force upgrade 2.0-flash to 1.5-pro temporarily until quota issue is resolved
+    if (model === "gemini-1.5-flash" || model === "gemini-1.0-pro" || model === "gemini-2.0-flash") {
+        console.warn(`[Gemini Wrapper] Auto-switching model ${model} to gemini-1.5-pro (Emergency Fix)`);
+        model = "gemini-1.5-pro";
     }
 
     const db = getFirestore();
