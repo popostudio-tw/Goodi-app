@@ -47,12 +47,14 @@ const RETRY_DELAYS = [1000, 2000, 5000]; // 重試延遲 (ms): 1s, 2s, 5s (expon
 // === Circuit Breaker 配置 ===
 const CIRCUIT_BREAKER_THRESHOLD = 5;  // 連續失敗 5 次後熔斷
 const CIRCUIT_BREAKER_TIMEOUT = 60000; // 熔斷後 60 秒才重試
+const QUOTA_BLOCK_DURATION = 1000 * 60 * 60; // 429 Limit:0 封鎖 1 小時
 
 // === Circuit Breaker 快取（避免每次都讀 Firestore）===
 interface CircuitBreakerCache {
     consecutiveFailures: number;
     openUntil: number;
     lastFetched: number;
+    blockedModels: Record<string, number>; // 模型 -> 解鎖時間戳
 }
 let circuitBreakerCache: CircuitBreakerCache | null = null;
 const CACHE_TTL = 10000; // 快取 10 秒
@@ -88,7 +90,8 @@ async function getCircuitBreakerState(): Promise<CircuitBreakerState> {
             circuitBreakerCache = {
                 consecutiveFailures: data.consecutiveFailures || 0,
                 openUntil: data.openUntil || 0,
-                lastFetched: now
+                lastFetched: now,
+                blockedModels: {} // 暫時從記憶體管理，Firestore 僅作簡單持久化
             };
             return data;
         }
@@ -119,7 +122,8 @@ async function updateCircuitBreakerState(state: Partial<CircuitBreakerState>): P
             circuitBreakerCache = {
                 consecutiveFailures: 0,
                 openUntil: 0,
-                lastFetched: now
+                lastFetched: now,
+                blockedModels: {}
             };
         }
         if (state.consecutiveFailures !== undefined) {
@@ -171,6 +175,17 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
     // === 步驟 0a: 檢查 Circuit Breaker 狀態（Firestore 持久化）===
     const circuitState = await getCircuitBreakerState();
     const now = Date.now();
+
+    // Smart Skip: 如果模型被標記為 blocked (limit: 0)，直接跳過
+    if (circuitBreakerCache?.blockedModels?.[model] && circuitBreakerCache.blockedModels[model] > now) {
+        console.warn(`[Smart Skip] Model ${model} is BLOCKED until ${new Date(circuitBreakerCache.blockedModels[model]).toISOString()}. Skipping.`);
+        // 模擬一個失敗，讓它進入 Fallback 流程
+        if (model === "gemini-2.0-flash") {
+             model = "gemini-1.5-pro";
+        } else if (model === "gemini-1.5-pro") {
+             model = "gemini-1.0-pro";
+        }
+    }
 
     if (circuitState.openUntil > now) {
         const waitTime = Math.ceil((circuitState.openUntil - now) / 1000);
@@ -384,23 +399,25 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                     error.message?.includes('quota') ||
                     error.message?.includes('Quota exceeded');
 
+                // Smart Skip Logic: 如果是 limit: 0 或 Free Tier 配額耗盡，暫時封鎖此模型
+                if (isQuotaExhausted) {
+                     if (!circuitBreakerCache) {
+                         circuitBreakerCache = { consecutiveFailures: 0, openUntil: 0, lastFetched: Date.now(), blockedModels: {} };
+                     }
+                     if (!circuitBreakerCache.blockedModels) circuitBreakerCache.blockedModels = {};
+
+                     circuitBreakerCache.blockedModels[model] = Date.now() + QUOTA_BLOCK_DURATION;
+                     console.warn(`[Smart Skip] Blocking model ${model} for 1 hour due to Quota Exhausted.`);
+                }
+
                 if (isPermanentFailure) {
                     console.error(`[Retry Policy] Permanent failure detected (404/400). Skipping retry.`);
                     throw error; // 立即失敗，不重試
                 }
 
-                if (isQuotaExhausted) {
-                    console.error(`[Retry Policy] Quota exhausted (429). Logging and stopping retry.`);
-                    // 記錄到 Firestore 用於監控
-                    const db = getFirestore();
-                    await db.collection('systemStatus').doc('quotaExhausted').set({
-                        lastOccurred: new Date().toISOString(),
-                        source,
-                        userId,
-                        errorMessage: error.message
-                    }, { merge: true });
-                    throw error; // 立即失敗，不重試
-                }
+                // 注意：這裡移除了 isQuotaExhausted 的 throw error，
+                // 因為我們希望 429 也能觸發 fallback（在下一次 loop 或 if check 中）
+                // 除非所有 fallback 都失敗，否則不應該在這裡 throw
 
                 if (attempt < MAX_RETRIES) {
                     const delay = RETRY_DELAYS[attempt] || 5000;
