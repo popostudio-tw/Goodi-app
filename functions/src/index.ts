@@ -1,9 +1,11 @@
-﻿import { onCall, HttpsError } from "firebase-functions/v2/https";
+
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { callGemini, shouldUseFallback } from "./geminiWrapper";
 
 import { initializeApp as initAdmin } from "firebase-admin/app";
 initAdmin();
 
+console.log("GeminiWrapper V2.1 loaded - Fallback Logic Active");
 
 // === 注意：舊版 API 追蹤系統已移除 ===
 // 所有 API 用量追蹤現在統一由 geminiWrapper.ts 處理
@@ -62,7 +64,7 @@ export const generateGeminiContent = onCall(
         source: 'task',
         userId: auth.uid,
         prompt,
-        model: model || "gemini-2.0-flash",
+        model: model || "gemini-1.5-pro",
         config: requestConfig
       });
 
@@ -182,7 +184,7 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
             source: 'daily',
             userId: 'system',
             prompt: combinedPrompt,
-            model: "gemini-2.0-flash",
+            model: "gemini-1.5-pro",
             config: {
               responseMimeType: "application/json",
               responseSchema: {
@@ -478,7 +480,7 @@ async function generateYesterdaySummaryForUser(
       source: 'summary',
       userId,
       prompt,
-      model: "gemini-2.0-flash",
+      model: "gemini-1.5-pro",
       config: {
         temperature: 0.8,
       },
@@ -604,7 +606,7 @@ export const generateGrowthReport = onCall(
         source: 'growth',
         userId: auth.uid,
         prompt,
-        model: "gemini-2.0-flash"
+        model: "gemini-1.5-pro"
       });
 
       if (shouldUseFallback(result)) {
@@ -702,7 +704,7 @@ async function generateWeeklyReportForUser(
     source: 'weekly',
     userId,
     prompt,
-    model: "gemini-2.0-flash"
+    model: "gemini-1.5-pro"
   });
 
   if (shouldUseFallback(result)) {
