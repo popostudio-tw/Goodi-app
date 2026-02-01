@@ -64,7 +64,7 @@ export const generateGeminiContent = onCall(
         source: 'task',
         userId: auth.uid,
         prompt,
-        model: model || "gemini-2.0-flash",
+        model: model || "gemini-1.5-pro",
         config: requestConfig
       });
 
@@ -184,7 +184,7 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
             source: 'daily',
             userId: 'system',
             prompt: combinedPrompt,
-            model: "gemini-2.0-flash",
+            model: "gemini-1.5-pro",
             config: {
               responseMimeType: "application/json",
               responseSchema: {
@@ -480,7 +480,7 @@ async function generateYesterdaySummaryForUser(
       source: 'summary',
       userId,
       prompt,
-      model: "gemini-2.0-flash",
+      model: "gemini-1.5-pro",
       config: {
         temperature: 0.8,
       },
@@ -606,7 +606,7 @@ export const generateGrowthReport = onCall(
         source: 'growth',
         userId: auth.uid,
         prompt,
-        model: "gemini-2.0-flash"
+        model: "gemini-1.5-pro"
       });
 
       if (shouldUseFallback(result)) {
@@ -704,7 +704,7 @@ async function generateWeeklyReportForUser(
     source: 'weekly',
     userId,
     prompt,
-    model: "gemini-2.0-flash"
+    model: "gemini-1.5-pro"
   });
 
   if (shouldUseFallback(result)) {
