@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { useUserData } from '../UserContext';
 import TestScoreModal from './TestScoreModal';
 import { getYesterdaySummary } from '../src/services/apiClient';
@@ -445,4 +445,4 @@ const SidebarWidgets: React.FC = () => {
   );
 };
 
-export default SidebarWidgets;
+export default memo(SidebarWidgets);

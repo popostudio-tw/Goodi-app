@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { ScoreEntry, Subject } from '../types';
 
 interface ScoreChartProps {
@@ -124,4 +124,4 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+export default memo(ScoreChart);
