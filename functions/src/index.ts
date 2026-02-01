@@ -1,9 +1,11 @@
-﻿import { onCall, HttpsError } from "firebase-functions/v2/https";
+
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { callGemini, shouldUseFallback } from "./geminiWrapper";
 
 import { initializeApp as initAdmin } from "firebase-admin/app";
 initAdmin();
 
+console.log("GeminiWrapper V2.1 loaded - Fallback Logic Active");
 
 // === 注意：舊版 API 追蹤系統已移除 ===
 // 所有 API 用量追蹤現在統一由 geminiWrapper.ts 處理
