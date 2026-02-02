@@ -124,4 +124,5 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+// Optimization: Prevent unnecessary re-renders when parent component (ParentModePage) updates
+export default React.memo(ScoreChart);
