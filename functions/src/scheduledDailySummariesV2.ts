@@ -271,7 +271,7 @@ ${treeHoleEmotion !== 'none' ? `- 樹洞情緒：${treeHoleEmotion}` : ''}
                         source: 'summary',
                         userId,
                         prompt,
-                        model: 'gemini-2.0-flash',
+                        // model: 'gemini-1.5-flash', // 使用預設模型
                         config: {
                             temperature: 0.9, // 提高創意度
                         }
