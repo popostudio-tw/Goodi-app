@@ -17,6 +17,7 @@ export const generateGeminiContent = onCall(
     secrets: ["GEMINI_API_KEY"],
   },
   async (request) => {
+    console.log("[System] Force update timestamp: 2024-01-01-FIX-V2"); // Force redeploy
     const { data, auth } = request;
 
     // 1. 驗證使用者是否登入
@@ -62,7 +63,7 @@ export const generateGeminiContent = onCall(
         source: 'task',
         userId: auth.uid,
         prompt,
-        model: model || "gemini-2.0-flash",
+        model: model, // 若為 undefined 則使用 wrapper 預設值
         config: requestConfig
       });
 
@@ -182,7 +183,7 @@ async function generateAndStoreDailyContent(dateStr: string): Promise<{ todayInH
             source: 'daily',
             userId: 'system',
             prompt: combinedPrompt,
-            model: "gemini-2.0-flash",
+            // model: "gemini-1.5-flash", // 使用預設
             config: {
               responseMimeType: "application/json",
               responseSchema: {
@@ -478,7 +479,7 @@ async function generateYesterdaySummaryForUser(
       source: 'summary',
       userId,
       prompt,
-      model: "gemini-2.0-flash",
+      // model: "gemini-1.5-flash", // 使用預設
       config: {
         temperature: 0.8,
       },
@@ -604,7 +605,7 @@ export const generateGrowthReport = onCall(
         source: 'growth',
         userId: auth.uid,
         prompt,
-        model: "gemini-2.0-flash"
+        // model: "gemini-1.5-flash" // 使用預設
       });
 
       if (shouldUseFallback(result)) {
@@ -702,7 +703,7 @@ async function generateWeeklyReportForUser(
     source: 'weekly',
     userId,
     prompt,
-    model: "gemini-2.0-flash"
+    // model: "gemini-1.5-flash" // 使用預設
   });
 
   if (shouldUseFallback(result)) {

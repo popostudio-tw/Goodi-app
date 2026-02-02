@@ -18,11 +18,12 @@ export interface GeminiCallParams {
 export interface GeminiCallResult {
     success: boolean;
     status: 'success' | 'fallback';  // 新增：明確狀態
-    reason?: 'daily_limit' | 'rate_limit' | 'circuit_breaker' | 'concurrency_limit' | 'api_error'; // 新增：失敗原因
+    reason?: 'daily_limit' | 'rate_limit' | 'circuit_breaker' | 'concurrency_limit' | 'api_error' | 'quota_exhausted'; // 新增：失敗原因
     text?: string;       // AI 生成的內容
     error?: string;      // 錯誤訊息
     rateLimited?: boolean; // 向後相容，但建議使用 reason
     fallback?: boolean;    // 向後相容，但建議使用 status
+    usedModel?: string;    // 實際使用的模型
 }
 
 interface UsageRecord {
@@ -34,18 +35,24 @@ interface UsageRecord {
     responseLength: number;
     error?: string;
     rateLimited?: boolean;
+    model?: string;
 }
 
 // === 全域限制配置 ===
-const GLOBAL_DAILY_LIMIT = 200;      // 每日最大 200 次
-const GLOBAL_RPM_LIMIT = 10;          // 每分鐘最大 10 次
+const GLOBAL_DAILY_LIMIT = 500;      // 每日最大 500 次 (提升以適應 1.5 Flash 較高的額度)
+const GLOBAL_RPM_LIMIT = 15;          // 每分鐘最大 15 次 (1.5 Flash Free Tier 限制)
 
 // === Retry Policy 配置 ===
-const MAX_RETRIES = 3;                // 最大重試次數
-const RETRY_DELAYS = [1000, 2000, 5000]; // 重試延遲 (ms): 1s, 2s, 5s (exponential backoff)
+const MAX_RETRIES = 2;                // 單一模型最大重試次數
+const RETRY_DELAYS = [1000, 2000];    // 重試延遲 (ms)
+
+// === Fallback 模型配置 ===
+// 當首選模型失敗時，依序嘗試這些模型
+const DEFAULT_MODEL = "gemini-1.5-flash";
+const FALLBACK_CHAIN = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"];
 
 // === Circuit Breaker 配置 ===
-const CIRCUIT_BREAKER_THRESHOLD = 5;  // 連續失敗 5 次後熔斷
+const CIRCUIT_BREAKER_THRESHOLD = 10;  // 連續失敗 10 次後熔斷 (放寬因為有 fallback)
 const CIRCUIT_BREAKER_TIMEOUT = 60000; // 熔斷後 60 秒才重試
 
 // === Circuit Breaker 快取（避免每次都讀 Firestore）===
@@ -156,7 +163,19 @@ function getTodayDateStr(): string {
 
 // === 核心函數：集中式 Gemini API 呼叫（含 Retry、Circuit Breaker、Concurrency Control）===
 export async function callGemini(params: GeminiCallParams): Promise<GeminiCallResult> {
-    const { source, userId, prompt, model = "gemini-2.0-flash", config } = params;
+    const { source, userId, prompt, model: requestedModel, config } = params;
+
+    // 建立模型嘗試鏈
+    const initialModel = requestedModel || DEFAULT_MODEL;
+    const modelChain = [initialModel];
+
+    // 將 Fallback Chain 中的模型加入（排除已在鏈中的）
+    for (const m of FALLBACK_CHAIN) {
+        if (!modelChain.includes(m)) {
+            modelChain.push(m);
+        }
+    }
+
     const db = getFirestore();
     const today = getTodayDateStr();
     const usageDocRef = db.collection('apiUsage').doc(`global_${today}`);
@@ -177,7 +196,8 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             promptLength: prompt.length,
             responseLength: 0,
             error: 'Circuit breaker open',
-            rateLimited: true
+            rateLimited: true,
+            model: initialModel
         });
 
         return {
@@ -185,7 +205,7 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             status: 'fallback',
             reason: 'circuit_breaker',
             rateLimited: true,
-            error: `Circuit breaker is open (too many consecutive failures). Retry after ${waitTime}s`
+            error: `Circuit breaker is open. Retry after ${waitTime}s`
         };
     }
 
@@ -201,7 +221,8 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             promptLength: prompt.length,
             responseLength: 0,
             error: 'Concurrency limit exceeded',
-            rateLimited: true
+            rateLimited: true,
+            model: initialModel
         });
 
         return {
@@ -215,7 +236,6 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
 
     // 增加並發計數
     currentConcurrentRequests++;
-    console.log(`[Concurrency] Current: ${currentConcurrentRequests}/${MAX_CONCURRENT_REQUESTS}`);
 
     try {
         // === 步驟 1: 檢查全域每日限制 ===
@@ -226,7 +246,6 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
         if (totalCalls >= GLOBAL_DAILY_LIMIT) {
             console.warn(`[Gemini Wrapper] Daily limit reached: ${totalCalls}/${GLOBAL_DAILY_LIMIT}`);
 
-            // 記錄被限制的呼叫
             await recordUsage(usageDocRef, {
                 timestamp: new Date().toISOString(),
                 source,
@@ -235,7 +254,8 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                 promptLength: prompt.length,
                 responseLength: 0,
                 rateLimited: true,
-                error: 'Daily limit exceeded'
+                error: 'Daily limit exceeded',
+                model: initialModel
             });
 
             return {
@@ -251,18 +271,12 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
         const lastMinuteReset = usageData?.lastMinuteReset ? new Date(usageData.lastMinuteReset) : new Date(0);
         const now = new Date();
         const minutesSinceReset = (now.getTime() - lastMinuteReset.getTime()) / 1000 / 60;
-
         let lastMinuteCount = usageData?.lastMinuteCount || 0;
-
-        // 如果超過 1 分鐘，重置計數器
-        if (minutesSinceReset >= 1) {
-            lastMinuteCount = 0;
-        }
+        if (minutesSinceReset >= 1) lastMinuteCount = 0;
 
         if (lastMinuteCount >= GLOBAL_RPM_LIMIT) {
             console.warn(`[Gemini Wrapper] Rate limit reached: ${lastMinuteCount}/${GLOBAL_RPM_LIMIT} per minute`);
 
-            // 記錄被限制的呼叫
             await recordUsage(usageDocRef, {
                 timestamp: now.toISOString(),
                 source,
@@ -271,7 +285,8 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
                 promptLength: prompt.length,
                 responseLength: 0,
                 rateLimited: true,
-                error: 'Rate limit exceeded'
+                error: 'Rate limit exceeded',
+                model: initialModel
             });
 
             return {
@@ -283,160 +298,123 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             };
         }
 
-        // === 步驟 3: 呼叫 Gemini API with Retry Policy ===
-        console.log(`[Gemini Wrapper] Calling API - Source: ${source}, User: ${userId}, Prompt Length: ${prompt.length}`);
-
+        // === 步驟 3: 執行模型鏈 Fallback 機制 ===
+        let lastError: Error | null = null;
+        let successModel: string | null = null;
         let responseText = "";
 
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        // 遍歷模型鏈
+        for (const modelToTry of modelChain) {
+            console.log(`[Gemini Wrapper] Trying model: ${modelToTry}`);
+
             try {
-                const startTime = Date.now();
+                // 對單一模型進行重試 (針對網絡錯誤)
+                for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                    try {
+                        const ai = getAiInstance();
+                        const requestParams: any = {
+                            model: modelToTry,
+                            contents: prompt
+                        };
+                        if (config) requestParams.generationConfig = config;
 
-                // Use the correct new SDK syntax
-                const ai = getAiInstance();
+                        console.log(`[Gemini Wrapper] Call attempt ${attempt + 1}/${MAX_RETRIES + 1} for ${modelToTry}`);
+                        const response = await ai.models.generateContent(requestParams);
 
-                console.log('[Gemini Wrapper] Making API call with:', {
-                    model,
-                    promptLength: prompt.length,
-                    configKeys: config ? Object.keys(config) : []
-                });
+                        responseText = response.text ||
+                            (response as any).candidates?.[0]?.content?.parts?.[0]?.text ||
+                            "";
 
-                // Build request - config params must be in generationConfig
-                const requestParams: any = {
-                    model,
-                    contents: prompt
-                };
+                        if (!responseText) {
+                            throw new Error('Empty response from Gemini API');
+                        }
 
-                if (config) {
-                    requestParams.generationConfig = config;
+                        // 成功！
+                        successModel = modelToTry;
+                        break;
+
+                    } catch (error: any) {
+                        // 判斷錯誤類型
+                        const isQuotaExhausted = error.status === 429 || error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED');
+                        const isNotFound = error.status === 404 || error.message?.includes('not found') || error.message?.includes('404');
+                        // const isServiceUnavailable = error.status === 503; // Unused
+
+                        // 如果是配額耗盡或模型不存在，不要重試當前模型，直接拋出讓外層迴圈捕捉並切換模型
+                        if (isQuotaExhausted || isNotFound) {
+                            console.warn(`[Gemini Wrapper] ${modelToTry} failed with permanent/quota error: ${error.message}`);
+                            throw error;
+                        }
+
+                        // 如果是網絡波動或服務暫時不可用，則進行 Retry
+                        if (attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAYS[attempt] || 1000;
+                            await new Promise(r => setTimeout(r, delay));
+                        } else {
+                            throw error;
+                        }
+                    }
                 }
 
-                const response = await ai.models.generateContent(requestParams);
+                if (successModel) break; // 成功則跳出模型鏈迴圈
 
-                // Debug: log full response structure
-                console.log('[Gemini Wrapper] Raw response:', JSON.stringify(response, null, 2));
-                console.log('[Gemini Wrapper] Response keys:', Object.keys(response));
-                console.log('[Gemini Wrapper] Response.text type:', typeof response.text);
-
-                // Try multiple ways to access response text
-                responseText = response.text ||
-                    (response as any).candidates?.[0]?.content?.parts?.[0]?.text ||
-                    "";
-
-                if (!responseText) {
-                    console.error('[Gemini Wrapper] Empty response detected. Full response:', response);
-                    throw new Error('Empty response from Gemini API - no text generated');
-                }
-
-                const duration = Date.now() - startTime;
-
-                console.log(`[Gemini Wrapper] API call successful - Attempt: ${attempt + 1}, Duration: ${duration}ms, Response Length: ${responseText.length}`);
-
-                // 成功後重置 circuit breaker（持久化到 Firestore）
-                await updateCircuitBreakerState({
-                    consecutiveFailures: 0,
-                    openUntil: 0
-                });
-
-                break; // 成功，跳出重試循環
             } catch (error: any) {
-                console.warn(`[Retry Policy] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error.message);
-
-                // 檢查是否為永久性錯誤（404、400、429 等不應重試）
-                const isPermanentFailure =
-                    error.message?.includes('not found') ||
-                    error.message?.includes('404') ||
-                    error.message?.includes('invalid model') ||
-                    error.status === 404 ||
-                    error.status === 400;
-
-                // 檢查是否為配額耗盡錯誤（429 / RESOURCE_EXHAUSTED）
-                const isQuotaExhausted =
-                    error.status === 429 ||
-                    error.code === 429 ||
-                    error.message?.includes('429') ||
-                    error.message?.includes('RESOURCE_EXHAUSTED') ||
-                    error.message?.includes('quota') ||
-                    error.message?.includes('Quota exceeded');
-
-                if (isPermanentFailure) {
-                    console.error(`[Retry Policy] Permanent failure detected (404/400). Skipping retry.`);
-                    throw error; // 立即失敗，不重試
-                }
-
-                if (isQuotaExhausted) {
-                    console.error(`[Retry Policy] Quota exhausted (429). Logging and stopping retry.`);
-                    // 記錄到 Firestore 用於監控
-                    const db = getFirestore();
-                    await db.collection('systemStatus').doc('quotaExhausted').set({
-                        lastOccurred: new Date().toISOString(),
-                        source,
-                        userId,
-                        errorMessage: error.message
-                    }, { merge: true });
-                    throw error; // 立即失敗，不重試
-                }
-
-                if (attempt < MAX_RETRIES) {
-                    const delay = RETRY_DELAYS[attempt] || 5000;
-                    console.log(`[Retry Policy] Retrying after ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                } else {
-                    // 所有重試都失敗，拋出錯誤
-                    throw error;
-                }
+                console.warn(`[Gemini Wrapper] Model ${modelToTry} failed completely.`, error.message);
+                lastError = error;
+                // 繼續嘗試下一個模型
             }
         }
 
-        // === 步驟 4: 記錄成功的呼叫 ===
-        await recordUsage(usageDocRef, {
-            timestamp: now.toISOString(),
-            source,
-            userId,
-            success: true,
-            promptLength: prompt.length,
-            responseLength: responseText.length
-        });
+        // === 檢查結果 ===
+        if (successModel && responseText) {
+            // 成功
+            await updateCircuitBreakerState({ consecutiveFailures: 0, openUntil: 0 });
 
-        // === 步驟 5: 更新統計數據 ===
-        await updateUsageStats(usageDocRef, {
-            source,
-            lastMinuteCount: minutesSinceReset >= 1 ? 1 : lastMinuteCount + 1,
-            lastMinuteReset: minutesSinceReset >= 1 ? now.toISOString() : usageData?.lastMinuteReset || now.toISOString()
-        });
+            await recordUsage(usageDocRef, {
+                timestamp: new Date().toISOString(),
+                source,
+                userId,
+                success: true,
+                promptLength: prompt.length,
+                responseLength: responseText.length,
+                model: successModel
+            });
 
-        return {
-            success: true,
-            status: 'success',
-            text: responseText
-        };
+            await updateUsageStats(usageDocRef, {
+                source,
+                lastMinuteCount: minutesSinceReset >= 1 ? 1 : lastMinuteCount + 1,
+                lastMinuteReset: minutesSinceReset >= 1 ? new Date().toISOString() : usageData?.lastMinuteReset || new Date().toISOString()
+            });
+
+            return {
+                success: true,
+                status: 'success',
+                text: responseText,
+                usedModel: successModel
+            };
+
+        } else {
+            // 所有模型都失敗
+            throw lastError || new Error("All models failed");
+        }
 
     } catch (error: any) {
-        console.error(`[Gemini Wrapper] All retries failed - Source: ${source}, Error:`, error.message);
+        console.error(`[Gemini Wrapper] All models failed - Source: ${source}, Error:`, error.message);
 
-        // === Circuit Breaker: 記錄連續失敗（持久化到 Firestore）===
+        // Circuit Breaker 更新
         const currentState = await getCircuitBreakerState();
         const newFailureCount = currentState.consecutiveFailures + 1;
 
-        console.warn(`[Circuit Breaker] Consecutive failures: ${newFailureCount}/${CIRCUIT_BREAKER_THRESHOLD}`);
-
         if (newFailureCount >= CIRCUIT_BREAKER_THRESHOLD) {
             const openUntil = Date.now() + CIRCUIT_BREAKER_TIMEOUT;
-            const waitTime = CIRCUIT_BREAKER_TIMEOUT / 1000;
-
             await updateCircuitBreakerState({
                 consecutiveFailures: newFailureCount,
                 openUntil
             });
-
-            console.error(`[Circuit Breaker] OPENED! Will retry after ${waitTime}s`);
+            console.error(`[Circuit Breaker] OPENED!`);
         } else {
-            await updateCircuitBreakerState({
-                consecutiveFailures: newFailureCount
-            });
+            await updateCircuitBreakerState({ consecutiveFailures: newFailureCount });
         }
 
-        // 記錄失敗的呼叫
         await recordUsage(usageDocRef, {
             timestamp: new Date().toISOString(),
             source,
@@ -444,44 +422,35 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             success: false,
             promptLength: prompt.length,
             responseLength: 0,
-            error: error.message
+            error: error.message,
+            model: 'all_failed'
         });
+
+        const isQuota = error.message?.includes('429') || error.message?.includes('quota');
 
         return {
             success: false,
             status: 'fallback',
-            reason: 'api_error',
+            reason: isQuota ? 'quota_exhausted' : 'api_error',
             error: error.message
         };
+
     } finally {
-        // 減少並發計數
         currentConcurrentRequests--;
-        console.log(`[Concurrency] Released. Current: ${currentConcurrentRequests}/${MAX_CONCURRENT_REQUESTS}`);
     }
 }
 
 // === Helper: 記錄單次 API 呼叫 ===
-/**
- * 記錄 API 使用量到 Firestore
- * 
- * 新架構：使用 subcollection 避免單一文件過大
- * - 主文件 (apiUsage/global_{date}): 僅存統計數據 (totalCalls, callsPerSource)
- * - Subcollection (apiUsage/global_{date}/calls/{callId}): 存每一筆詳細調用記錄
- */
 async function recordUsage(usageDocRef: FirebaseFirestore.DocumentReference, record: UsageRecord) {
     try {
-        // const db = getFirestore(); // 未使用，已註解
-        // 保留 subcollection 儲存資料，但簡化結構
         const { FieldValue } = await import("firebase-admin/firestore");
-
-        // 1. 將詳細記錄寫入 subcollection（避免主文件無限增長）
         const callsCollectionRef = usageDocRef.collection('calls');
         await callsCollectionRef.add({
             ...record,
             createdAt: new Date().toISOString()
         });
 
-        // 2. 更新主文件的統計數據（不再使用 arrayUnion）
+        // 僅更新統計，不寫入大量日誌到主文件
         await usageDocRef.set({
             date: getTodayDateStr(),
             totalCalls: FieldValue.increment(1),
@@ -489,10 +458,8 @@ async function recordUsage(usageDocRef: FirebaseFirestore.DocumentReference, rec
             lastUpdated: new Date().toISOString()
         }, { merge: true });
 
-        console.log(`[Usage] Recorded: ${record.source} (${record.success ? 'success' : 'failed'})`);
     } catch (error) {
         console.error('[Gemini Wrapper] Failed to record usage:', error);
-        // 記錄失敗不應阻擋主流程
     }
 }
 
@@ -519,17 +486,13 @@ async function updateUsageStats(
         }, { merge: true });
     } catch (error) {
         console.error('[Gemini Wrapper] Failed to update usage stats:', error);
-        // 統計更新失敗不應阻擋主流程
     }
 }
 
 // === Helper: 檢查是否應使用 Fallback ===
 export function shouldUseFallback(result: GeminiCallResult): boolean {
-    // 優先檢查新的 status 欄位
     if (result.status === 'fallback') {
         return true;
     }
-    // 向後相容：檢查舊的欄位
     return !result.success || result.rateLimited || !result.text;
 }
-
