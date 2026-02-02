@@ -445,4 +445,4 @@ const SidebarWidgets: React.FC = () => {
   );
 };
 
-export default SidebarWidgets;
+export default React.memo(SidebarWidgets);
