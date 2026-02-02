@@ -17,6 +17,7 @@ export const generateGeminiContent = onCall(
     secrets: ["GEMINI_API_KEY"],
   },
   async (request) => {
+    console.log("[System] Force update timestamp: 2024-01-01-FIX-V2"); // Force redeploy
     const { data, auth } = request;
 
     // 1. 驗證使用者是否登入
