@@ -243,7 +243,6 @@ const AiYesterdaySummary: React.FC = () => {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const { userData } = useUserData();
 
   useEffect(() => {
     const currentUser = auth.currentUser;
@@ -445,4 +444,5 @@ const SidebarWidgets: React.FC = () => {
   );
 };
 
-export default SidebarWidgets;
+// Optimized: Isolate children (like TodayInHistory) from frequent parent re-renders
+export default React.memo(SidebarWidgets);
