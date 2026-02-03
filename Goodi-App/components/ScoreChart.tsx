@@ -124,4 +124,5 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+// Optimized: Prevent re-renders when scores prop is stable
+export default React.memo(ScoreChart);
