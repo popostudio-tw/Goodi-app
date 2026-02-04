@@ -13,7 +13,8 @@ const COLORS: Record<Subject, string> = {
     '自然': '#84cc16', // lime-500
 };
 
-const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
+// Component definition changed to standard function to avoid React.FC type inference issues with React.memo
+const ScoreChart = ({ scores }: ScoreChartProps) => {
     if (scores.length < 2) {
         return <div className="text-center p-8 text-gray-500">成績紀錄少於兩筆，尚無法繪製圖表。</div>;
     }
@@ -124,4 +125,6 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
     );
 };
 
-export default ScoreChart;
+// Optimization: Wrap with React.memo to prevent unnecessary re-renders when parent re-renders.
+// Score data is typically stable unless explicitly updated.
+export default React.memo(ScoreChart);
