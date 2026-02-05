@@ -29,55 +29,20 @@ export const deleteUserAccount = onCall(async (request) => {
     const db = getFirestore();
     const authService = getAuth();
 
-    // 2. Delete all Firestore subcollections
-    const subcollections = [
-      "highlights",
-      "dailySummaries",
-      "weeklyReports",
-      "tasks",
-      "journals",
-    ];
+    // 2. Recursively delete all data in the user document and its subcollections
+    // This is more memory efficient than loading all documents into memory
+    const userRef = db.collection("users").doc(userId);
 
-    for (const subcollection of subcollections) {
-      const collectionRef = db
-        .collection("users")
-        .doc(userId)
-        .collection(subcollection);
-
-      const snapshot = await collectionRef.get();
-
-      if (!snapshot.empty) {
-        console.log(
-          `[Account Deletion] Deleting ${snapshot.size} documents from ${subcollection}`
-        );
-
-        // Delete in batches of 500 (Firestore limit)
-        const batches = [];
-        let batch = db.batch();
-        let count = 0;
-
-        snapshot.docs.forEach((doc) => {
-          batch.delete(doc.ref);
-          count++;
-
-          if (count === 500) {
-            batches.push(batch.commit());
-            batch = db.batch();
-            count = 0;
-          }
-        });
-
-        if (count > 0) {
-          batches.push(batch.commit());
-        }
-
-        await Promise.all(batches);
-      }
+    // Check if document exists first to avoid unnecessary operations (optional but good for logging)
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+        console.log(`[Account Deletion] Found user document, starting recursive delete...`);
+        await db.recursiveDelete(userRef);
+        console.log(`[Account Deletion] Recursive delete completed for user: ${userId}`);
+    } else {
+        console.log(`[Account Deletion] User document not found in Firestore (might be already deleted or auth-only user)`);
+        // We still proceed to ensure auth account is deleted
     }
-
-    // 3. Delete main user document
-    await db.collection("users").doc(userId).delete();
-    console.log(`[Account Deletion] Deleted main user document`);
 
     // 4. Log deletion for compliance (retain for 30 days)
     await db.collection("deletedAccounts").doc(userId).set({
@@ -87,8 +52,17 @@ export const deleteUserAccount = onCall(async (request) => {
     });
 
     // 5. Delete Firebase Auth account (must be last)
-    await authService.deleteUser(userId);
-    console.log(`[Account Deletion] Deleted Firebase Auth account`);
+    try {
+        await authService.deleteUser(userId);
+        console.log(`[Account Deletion] Deleted Firebase Auth account`);
+    } catch (authError: any) {
+        // If the user is not found in Auth (already deleted), we consider it a success
+        if (authError.code === 'auth/user-not-found') {
+             console.log(`[Account Deletion] User not found in Auth, skipping.`);
+        } else {
+            throw authError;
+        }
+    }
 
     return {
       success: true,
