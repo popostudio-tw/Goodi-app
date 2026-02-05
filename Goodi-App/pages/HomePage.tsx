@@ -11,7 +11,7 @@ const BTN_COMPLETE = "bg-emerald-500 text-white hover:bg-emerald-600";
 const BTN_PROACTIVE = "bg-blue-500 text-white hover:bg-blue-600";
 
 // Featured task item (horizontal layout for weekly/special tasks)
-const FeaturedTaskListItem: React.FC<{ task: Task; onCompleteTask: (taskId: number, isProactive: boolean) => void; onReportPraise: (info: { taskId: number, isProactive: boolean }) => void; tag: string; }> = ({ task, onCompleteTask, onReportPraise, tag }) => {
+const FeaturedTaskListItem: React.FC<{ task: Task; onCompleteTask: (taskId: number, isProactive: boolean) => void; onReportPraise: (info: { taskId: number, isProactive: boolean }) => void; tag: string; }> = React.memo(({ task, onCompleteTask, onReportPraise, tag }) => {
     const isPraiseTask = task.id === 27;
     const handleComplete = (isProactive: boolean) => {
         if (isPraiseTask) onReportPraise({ taskId: task.id, isProactive }); else onCompleteTask(task.id, isProactive);
@@ -54,10 +54,10 @@ const FeaturedTaskListItem: React.FC<{ task: Task; onCompleteTask: (taskId: numb
             </div>
         </div>
     );
-};
+});
 
 // Daily task card (vertical layout)
-const DailyTaskCard: React.FC<{ task: Task; onCompleteTask: (taskId: number, isProactive: boolean) => void; onReportPraise: (info: { taskId: number, isProactive: boolean }) => void; }> = ({ task, onCompleteTask, onReportPraise }) => {
+const DailyTaskCard: React.FC<{ task: Task; onCompleteTask: (taskId: number, isProactive: boolean) => void; onReportPraise: (info: { taskId: number, isProactive: boolean }) => void; }> = React.memo(({ task, onCompleteTask, onReportPraise }) => {
     const isPraiseTask = task.id === 27;
     const handleComplete = (isProactive: boolean) => {
         if (isPraiseTask) onReportPraise({ taskId: task.id, isProactive }); else onCompleteTask(task.id, isProactive);
@@ -110,7 +110,7 @@ const DailyTaskCard: React.FC<{ task: Task; onCompleteTask: (taskId: number, isP
             </div>
         </div>
     );
-};
+});
 
 // Custom task modal
 const CustomTaskModal: React.FC<{
