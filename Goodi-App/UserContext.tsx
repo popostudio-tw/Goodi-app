@@ -208,6 +208,12 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
   }, [userData]);
 
+  // Optimize: Use ref to access latest userData in callbacks without adding it to dependencies
+  const userDataRef = useRef(userData);
+  useEffect(() => {
+    userDataRef.current = userData;
+  }, [userData]);
+
   // Daily Reset Logic using LocalStorage Data
   useEffect(() => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -319,18 +325,19 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
   // --- UTILITY & HELPER FUNCTIONS ---
   const addTransaction = useCallback((description: string, amount: string) => {
     const newTransaction: Transaction = { id: Date.now(), description, amount, timestamp: Date.now() };
-    updateUserData({ transactions: [newTransaction, ...userData.transactions] });
-  }, [userData.transactions, updateUserData]);
+    updateUserData({ transactions: [newTransaction, ...userDataRef.current.transactions] });
+  }, [updateUserData]);
 
   const gainPoints = useCallback((amount: number) => {
-    updateUserData({ points: Number(userData.points || 0) + amount });
+    updateUserData({ points: Number(userDataRef.current.points || 0) + amount });
     setIsPointsAnimating(true);
     setTimeout(() => setIsPointsAnimating(false), 600);
-  }, [userData.points, updateUserData]);
+  }, [updateUserData]);
 
   const unlockAchievement = useCallback((id: string, customTitle?: string, customIcon?: string, videoId?: string) => {
+    const currentData = userDataRef.current;
     // Check if achievement exists
-    const existingAch = userData.achievements.find(a => a.id === id);
+    const existingAch = currentData.achievements.find(a => a.id === id);
 
     if (existingAch) {
       if (!existingAch.unlocked) {
@@ -338,8 +345,8 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
         addToast(`成就解鎖：${existingAch.title}`, 'celebrate');
         const newItem: InventoryItem = { id: Date.now() + Math.random(), name: '成就獎勵寶箱', description: 'https://api.iconify.design/twemoji/gem-stone.svg', timestamp: Date.now(), used: false };
         updateUserData({
-          achievements: userData.achievements.map(a => a.id === id ? { ...a, unlocked: true, videoId: videoId || a.videoId } : a),
-          inventory: [newItem, ...userData.inventory]
+          achievements: currentData.achievements.map(a => a.id === id ? { ...a, unlocked: true, videoId: videoId || a.videoId } : a),
+          inventory: [newItem, ...currentData.inventory]
         });
         addTransaction('獲得成就獎勵', '成就獎勵寶箱');
       }
@@ -349,11 +356,11 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
       const newItem: InventoryItem = { id: Date.now() + Math.random(), name: '大師獎勵寶箱', description: 'https://api.iconify.design/twemoji/crown.svg', timestamp: Date.now(), used: false };
 
       updateUserData({
-        inventory: [newItem, ...userData.inventory]
+        inventory: [newItem, ...currentData.inventory]
       });
       addTransaction('獲得大師獎勵', '大師獎勵寶箱');
     }
-  }, [userData.achievements, userData.inventory, updateUserData, addToast, addTransaction]);
+  }, [updateUserData, addToast, addTransaction]);
 
   const checkAchievements = useCallback(() => {
     const completedTasks = userData.tasks.filter(t => t.completed);
@@ -368,8 +375,9 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
   useEffect(() => { checkAchievements(); }, [checkAchievements]);
 
   // --- MAIN HANDLERS ---
-  const handleCompleteTask = (taskId: number, isProactive: boolean) => {
-    const task = userData.tasks.find(t => t.id === taskId);
+  const handleCompleteTask = useCallback((taskId: number, isProactive: boolean) => {
+    const currentData = userDataRef.current;
+    const task = currentData.tasks.find(t => t.id === taskId);
     if (!task || task.completed) return;
 
     // Logic for Mastery: 1.5x points
@@ -382,9 +390,9 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
 
     const newTransaction: Transaction = { id: Date.now(), description: `完成任務: ${task.text} ${isProactive ? '(主動)' : ''} ${task.mastered ? '(大師加成)' : ''}`, amount: `+${pointsGained} 積分`, timestamp: Date.now() };
 
-    let finalTasks = userData.tasks;
+    let finalTasks = currentData.tasks;
 
-    const newTasks = userData.tasks.map(t => {
+    const newTasks = currentData.tasks.map(t => {
       if (t.id === taskId) {
         const updatedTask = { ...t, completed: true };
 
@@ -420,27 +428,28 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
 
     updateUserData({
       tasks: finalTasks,
-      streak: userData.streak + 1,
-      points: Number(userData.points || 0) + pointsGained,
-      transactions: [newTransaction, ...userData.transactions],
+      streak: currentData.streak + 1,
+      points: Number(currentData.points || 0) + pointsGained,
+      transactions: [newTransaction, ...currentData.transactions],
     });
 
     const praiseMsg = task.mastered
       ? `大師級表現！獲得 ${pointsGained} 積分 (含加成)！`
       : `任務完成！獲得 ${pointsGained} 積分！`;
     addToast(praiseMsg, 'success');
-  };
+  }, [updateUserData, addToast, unlockAchievement]);
 
-  const handlePraiseSubmit = (taskId: number, isProactive: boolean, praiseText: string) => {
+  const handlePraiseSubmit = useCallback((taskId: number, isProactive: boolean, praiseText: string) => {
+    const currentData = userDataRef.current;
     const targetId = 27;
-    let task = userData.tasks.find(t => t.id === targetId);
+    let task = currentData.tasks.find(t => t.id === targetId);
     if (!task) { task = initialTasksData.find(t => t.id === 27); }
     if (!task) { task = { id: 27, text: '得到老師稱讚', points: 5, completed: false, category: '特殊', description: '今天在學校表現很棒！', icon: 'https://api.iconify.design/twemoji/star-struck.svg' } as Task; }
 
     if (task.completed) { addToast('今天已經領過獎勵囉！明天再來吧！'); return; }
 
     const pointsGained = isProactive ? Math.floor(Number(task.points) * 1.5) : Number(task.points);
-    const updatedTasks = userData.tasks.map(t => t.id === targetId ? { ...t, completed: true } : t);
+    const updatedTasks = currentData.tasks.map(t => t.id === targetId ? { ...t, completed: true } : t);
     const transactionDescription = `完成任務: ${task.text} ${isProactive ? '(主動)' : ''}`;
     const newTransaction: Transaction = { id: Date.now(), description: transactionDescription, amount: `+${pointsGained} 積分`, timestamp: Date.now() };
 
@@ -448,14 +457,14 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children, us
     setTimeout(() => setIsPointsAnimating(false), 600);
 
     updateUserData({
-      points: Number(userData.points || 0) + pointsGained,
+      points: Number(currentData.points || 0) + pointsGained,
       tasks: updatedTasks,
-      streak: userData.streak + 1,
-      sharedMessages: [`老師稱讚「${userData.userProfile.nickname}」因為：${praiseText}`, ...userData.sharedMessages],
-      transactions: [newTransaction, ...userData.transactions],
+      streak: currentData.streak + 1,
+      sharedMessages: [`老師稱讚「${currentData.userProfile.nickname}」因為：${praiseText}`, ...currentData.sharedMessages],
+      transactions: [newTransaction, ...currentData.transactions],
     });
     addToast(`太棒了！獲得 ${pointsGained} 積分！`, 'celebrate');
-  };
+  }, [updateUserData, addToast]);
 
   const handlePlayGachapon = (): InventoryItem | null => {
     if (userData.gachaponTickets < 1) { addToast('扭蛋券不足！'); return null; }
