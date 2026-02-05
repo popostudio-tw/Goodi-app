@@ -90,23 +90,19 @@ export async function setCachedSuggestion(
 /**
  * 清除過期的快取項目（可由排程任務調用）
  */
-export async function cleanExpiredCache(): Promise<number> {
+export async function cleanExpiredCache(collectionName: string = 'aiSuggestionsCache'): Promise<number> {
     try {
         const now = new Date();
-        const cacheRef = db.collection('aiSuggestionsCache');
-        const snapshot = await cacheRef.get();
+        const cacheRef = db.collection(collectionName);
+        // Optimization: Use query to fetch only expired documents
+        const snapshot = await cacheRef.where('expiresAt', '<', now.toISOString()).get();
 
         let deletedCount = 0;
         const batch = db.batch();
 
         snapshot.forEach((doc) => {
-            const data = doc.data() as CachedSuggestion;
-            const expiresAt = new Date(data.expiresAt);
-
-            if (now > expiresAt) {
-                batch.delete(doc.ref);
-                deletedCount++;
-            }
+            batch.delete(doc.ref);
+            deletedCount++;
         });
 
         if (deletedCount > 0) {
