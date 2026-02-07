@@ -15,7 +15,8 @@
 
 import { useState, useEffect } from 'react';
 import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase'; // Jules 需要确认路径
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../../firebase';
 
 /**
  * Goodi 恐龙风格的等待语句库
@@ -208,11 +209,24 @@ export interface GenerateAiContentOptions {
 export const generateAiContentAsync = async (
     options: GenerateAiContentOptions
 ): Promise<string> => {
-    // TODO: Jules 实现
-    // 1. 调用 Cloud Function 创建 aiTask
-    // 2. 返回 taskId
+    try {
+        console.log('[generateAiContentAsync] Calling createAiTask with options:', options);
 
-    console.warn('[generateAiContentAsync] Placeholder - Jules needs to implement');
+        const createAiTask = httpsCallable(functions, 'createAiTask');
+        const response = await createAiTask(options);
 
-    throw new Error('generateAiContentAsync not implemented yet - Jules please implement');
+        const data = response.data as { taskId: string };
+
+        if (!data || !data.taskId) {
+            console.error('[generateAiContentAsync] Invalid response:', response);
+            throw new Error('Invalid response from createAiTask: missing taskId');
+        }
+
+        console.log('[generateAiContentAsync] Task created successfully:', data.taskId);
+        return data.taskId;
+
+    } catch (error: any) {
+        console.error('[generateAiContentAsync] Error creating task:', error);
+        throw error;
+    }
 };
