@@ -1,4 +1,4 @@
-﻿import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { callGemini, shouldUseFallback } from "./geminiWrapper";
 
 import { initializeApp as initAdmin } from "firebase-admin/app";
@@ -1013,3 +1013,5 @@ export { handleUserTransaction } from "./handleUserTransaction";
 // === Admin 權限管理 (2025-12-30) ===
 export { setAdminClaim, checkAdminStatus, listAdmins } from "./adminManagement";
 
+// === 異步 AI 任務處理 (2025-01-02) ===
+export { createAiTask, processAiTask } from "./asyncAiTasks";
