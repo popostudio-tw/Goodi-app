@@ -388,7 +388,7 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             }
         }
 
-        // === 步驟 4: 記錄成功的呼叫 ===
+        // === 步驟 4: 記錄成功的呼叫並更新統計數據（合併操作） ===
         await recordUsage(usageDocRef, {
             timestamp: now.toISOString(),
             source,
@@ -396,11 +396,7 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
             success: true,
             promptLength: prompt.length,
             responseLength: responseText.length
-        });
-
-        // === 步驟 5: 更新統計數據 ===
-        await updateUsageStats(usageDocRef, {
-            source,
+        }, {
             lastMinuteCount: minutesSinceReset >= 1 ? 1 : lastMinuteCount + 1,
             lastMinuteReset: minutesSinceReset >= 1 ? now.toISOString() : usageData?.lastMinuteReset || now.toISOString()
         });
@@ -467,8 +463,17 @@ export async function callGemini(params: GeminiCallParams): Promise<GeminiCallRe
  * 新架構：使用 subcollection 避免單一文件過大
  * - 主文件 (apiUsage/global_{date}): 僅存統計數據 (totalCalls, callsPerSource)
  * - Subcollection (apiUsage/global_{date}/calls/{callId}): 存每一筆詳細調用記錄
+ *
+ * 優化：合併統計數據更新，減少寫入次數
  */
-async function recordUsage(usageDocRef: FirebaseFirestore.DocumentReference, record: UsageRecord) {
+async function recordUsage(
+    usageDocRef: FirebaseFirestore.DocumentReference,
+    record: UsageRecord,
+    stats?: {
+        lastMinuteCount: number;
+        lastMinuteReset: string;
+    }
+) {
     try {
         // const db = getFirestore(); // 未使用，已註解
         // 保留 subcollection 儲存資料，但簡化結構
@@ -482,44 +487,25 @@ async function recordUsage(usageDocRef: FirebaseFirestore.DocumentReference, rec
         });
 
         // 2. 更新主文件的統計數據（不再使用 arrayUnion）
-        await usageDocRef.set({
+        const updateData: any = {
             date: getTodayDateStr(),
             totalCalls: FieldValue.increment(1),
             [`callsPerSource.${record.source}`]: FieldValue.increment(1),
             lastUpdated: new Date().toISOString()
-        }, { merge: true });
+        };
+
+        // 如果有提供額外的統計數據 (如每分鐘計數)，合併更新
+        if (stats) {
+            updateData.lastMinuteCount = stats.lastMinuteCount;
+            updateData.lastMinuteReset = stats.lastMinuteReset;
+        }
+
+        await usageDocRef.set(updateData, { merge: true });
 
         console.log(`[Usage] Recorded: ${record.source} (${record.success ? 'success' : 'failed'})`);
     } catch (error) {
         console.error('[Gemini Wrapper] Failed to record usage:', error);
         // 記錄失敗不應阻擋主流程
-    }
-}
-
-// === Helper: 更新統計數據 ===
-async function updateUsageStats(
-    usageDocRef: FirebaseFirestore.DocumentReference,
-    stats: {
-        source: string;
-        lastMinuteCount: number;
-        lastMinuteReset: string;
-    }
-) {
-    try {
-        const { FieldValue } = await import("firebase-admin/firestore");
-        const { source, lastMinuteCount, lastMinuteReset } = stats;
-
-        await usageDocRef.set({
-            date: getTodayDateStr(),
-            totalCalls: FieldValue.increment(1),
-            [`callsPerSource.${source}`]: FieldValue.increment(1),
-            lastMinuteCount,
-            lastMinuteReset,
-            lastUpdated: new Date().toISOString()
-        }, { merge: true });
-    } catch (error) {
-        console.error('[Gemini Wrapper] Failed to update usage stats:', error);
-        // 統計更新失敗不應阻擋主流程
     }
 }
 
