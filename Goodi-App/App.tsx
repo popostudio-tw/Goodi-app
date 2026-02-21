@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import { UserDataProvider, useUserData } from './UserContext';
+import { UIProvider } from './UIContext';
 import { ToastMessage } from './types';
 import Toast from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -97,10 +98,12 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider> {/* ✅ 1. AuthProvider wraps everything */}
-        <UserDataProvider addToast={addToast}> {/* ✅ 2. UserDataProvider is inside AuthProvider */}
-          <Toast toast={toast} />
-          <AppRoutes /> {/* ✅ 3. Routes use the contexts */}
-        </UserDataProvider>
+        <UIProvider>
+          <UserDataProvider addToast={addToast}> {/* ✅ 2. UserDataProvider is inside AuthProvider */}
+            <Toast toast={toast} />
+            <AppRoutes /> {/* ✅ 3. Routes use the contexts */}
+          </UserDataProvider>
+        </UIProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

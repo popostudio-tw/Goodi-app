@@ -1,13 +1,15 @@
 
 import React from 'react';
 import { useUserData } from '../UserContext';
+import { useUI } from '../UIContext';
 
 interface HeaderProps {
   onLogoClick: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ onLogoClick }) => {
-    const { userData, isPointsAnimating } = useUserData();
+    const { userData } = useUserData();
+    const { isPointsAnimating } = useUI();
     const { points, tokens, gachaponTickets, keyEvents } = userData;
 
     const today = new Date();
