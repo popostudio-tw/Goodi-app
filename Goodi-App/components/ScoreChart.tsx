@@ -13,7 +13,14 @@ const COLORS: Record<Subject, string> = {
     '自然': '#84cc16', // lime-500
 };
 
-const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
+/**
+ * ⚡ Performance Optimization:
+ * Wrapped in React.memo to prevent unnecessary re-renders.
+ * Since this component is computationally expensive (SVG rendering) and its parent (Dashboard)
+ * re-renders frequently due to other data changes, this optimization ensures ScoreChart
+ * only updates when `scores` actually changes.
+ */
+const ScoreChart = React.memo(({ scores }: ScoreChartProps) => {
     if (scores.length < 2) {
         return <div className="text-center p-8 text-gray-500">成績紀錄少於兩筆，尚無法繪製圖表。</div>;
     }
@@ -122,6 +129,6 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ scores }) => {
             </div>
         </div>
     );
-};
+});
 
 export default ScoreChart;
